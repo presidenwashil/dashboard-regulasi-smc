@@ -1,0 +1,4 @@
+# The docs/testing.md gate: block a commit that breaks type, lint, or tests.
+npx tsc -b
+npx oxlint
+npx vitest run

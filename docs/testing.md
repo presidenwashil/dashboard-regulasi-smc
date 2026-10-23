@@ -20,7 +20,9 @@ ticket. The rules below are the concrete application of the decisions in spec
   include finds anything `*.test.*`.
 - Node tooling under `scripts/` is not app source: it follows the same
   colocated pattern (`scripts/<tool>.test.mjs`), established by the
-  ship-pipeline slice (ticket #3).
+  ship-pipeline slice (ticket #3). Tooling tests inject their side-effecting
+  dependencies (`run`/`copy`/`log`) and expect them to return a plain
+  boolean for "step ok" — the real spawners run only outside tests.
 - Fidelity suites for a sub-package may live alongside it with a `.fidelity.test.ts`
   suffix (`src/adapter/mock/backend.fidelity.test.ts`).
 - Shared setup lives in `src/test/setup.ts`. Do not add global mocks there per-test.

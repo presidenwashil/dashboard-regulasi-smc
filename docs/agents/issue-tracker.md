@@ -14,6 +14,26 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Close**: `gh issue close <number> --comment "..."`
 
+## Pull requests: the merge path
+
+Work never lands on `main` by direct commit; `main` only gains commits via
+squash-merged PRs. The flow:
+
+1. Branch per ticket: `git checkout -b <descriptive-name>`.
+2. Push, then `gh pr create --base main`.
+3. The body's **Summary** starts with the linkage block:
+   `> Resolves #<ticket> · Part of #<spec>`. `Resolves` makes the owner's
+   squash-merge auto-close the ticket; the plain reference keeps the spec
+   open. No ticket → no linkage block.
+4. Follow the `pr` skill template for the rest of the body
+   (Summary / Evidence / Merge Danger).
+5. The repo owner squash-merges. The agent does not merge or push PRs; if the
+   owner explicitly authorizes a one-way door (a merge, a deploy), record the
+   approval on the PR as a decision log before acting.
+
+Done when: `git log <default-branch>` shows only squash-merge commits with
+ticket linkage.
+
 Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
 
 ## Pull requests as a triage surface
