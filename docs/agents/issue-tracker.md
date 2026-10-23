@@ -2,7 +2,7 @@
 
 Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 
-> **Prerequisite:** this repo does not have a git remote configured yet. Run `git init`, commit, then `git remote add origin git@github.com:<owner>/dashboard-regulasi-smc.git` before any `gh issue` command will work.
+> Remote is configured: `origin` → https://github.com/presidenwashil/dashboard-regulasi-smc. `gh` infers the repo automatically from inside a clone.
 
 ## Conventions
 
