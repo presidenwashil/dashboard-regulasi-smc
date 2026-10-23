@@ -17,7 +17,7 @@ guidance). The replatform spec and its tickets live as GitHub issues.
 | `npm run typecheck` | `tsc -b` |
 | `npm run lint` | oxlint |
 | `npm run test` / `npm run test:watch` | Vitest suite (component + contract + mock fidelity) |
-| `npm run ship` | _(ticket #3)_ validate → build → copy to `../bank-dokumen/Index.html` → `clasp push` → update the verification deployment |
+| `npm run ship` | validate → build → copy to `../bank-dokumen/Index.html` → `clasp push` → update the verification deployment (see `docs/ship.md`) |
 | `npm run release` | _(final ticket)_ explicit-only production cutover |
 
 Production behavior (`google.script.run`) only exists inside the Apps Script
