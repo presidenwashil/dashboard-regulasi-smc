@@ -11,22 +11,31 @@
 // docs/ship.md). Auth stays on the developer machine (ADR-0001).
 import { copyFileSync, readFileSync } from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 import { runCommand } from './lib/spawn.mjs'
-
-const CONFIG_FILE = 'ship.config.json'
+import { CONFIG_FILE, repoRoot, siblingRepo, VERIFICATION_DESCRIPTION } from './lib/config.mjs'
 
 export function loadConfig(rootDir) {
-  let parsed
+  const file = path.join(rootDir, CONFIG_FILE)
+  let raw
   try {
-    parsed = JSON.parse(readFileSync(path.join(rootDir, CONFIG_FILE), 'utf8'))
+    raw = readFileSync(file, 'utf8')
   } catch {
     throw new Error(
       `No usable ${CONFIG_FILE} at ${rootDir}. Run the one-time setup ` +
         `("npm run ship:setup" — see docs/ship.md) and commit the verification deployment id.`,
     )
   }
-  if (!parsed.verificationDeploymentId) {
+  let parsed
+  try {
+    parsed = JSON.parse(raw)
+  } catch (reason) {
+    throw new Error(
+      `${CONFIG_FILE} is not valid JSON — fix or delete it and re-run "npm run ship:setup". ` +
+        `(${reason.message})`,
+    )
+  }
+  if (!parsed?.verificationDeploymentId) {
     throw new Error(
       `${CONFIG_FILE} has no verificationDeploymentId. Run "npm run ship:setup" ` +
         `(one-time setup — see docs/ship.md).`,
@@ -36,8 +45,7 @@ export function loadConfig(rootDir) {
 }
 
 export function buildSteps(rootDir, config) {
-  const siblingRepo = path.resolve(rootDir, '..', 'bank-dokumen')
-  const description = 'verification: React replatform client (npm run ship)'
+  const sibling = siblingRepo(rootDir)
   return [
     { name: 'typecheck', cmd: ['npm', 'run', 'typecheck'] },
     { name: 'lint', cmd: ['npm', 'run', 'lint'] },
@@ -47,14 +55,14 @@ export function buildSteps(rootDir, config) {
       name: 'copy artifact',
       copy: {
         src: path.join(rootDir, 'dist', 'index.html'),
-        dst: path.join(siblingRepo, 'Index.html'),
+        dst: path.join(sibling, 'Index.html'),
       },
     },
-    { name: 'clasp push', cmd: ['clasp', 'push'], cwd: siblingRepo },
+    { name: 'clasp push', cmd: ['clasp', 'push'], cwd: sibling },
     {
       name: 'redeploy verification',
-      cmd: ['clasp', 'redeploy', config.verificationDeploymentId, '-d', description],
-      cwd: siblingRepo,
+      cmd: ['clasp', 'redeploy', config.verificationDeploymentId, '-d', VERIFICATION_DESCRIPTION],
+      cwd: sibling,
     },
   ]
 }
@@ -70,7 +78,7 @@ export function runPipeline(steps, deps) {
       ok = run(step)
     }
     if (!ok) {
-      log(`✗ ${step.name} failed — stopping. No later step ran; nothing was deployed.`)
+      log(`✗ ${step.name} failed — stopping; later steps did not run.`)
       return false
     }
   }
@@ -79,7 +87,7 @@ export function runPipeline(steps, deps) {
 }
 
 function main() {
-  const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
+  const rootDir = repoRoot()
   const log = (line) => console.log(line)
   const config = loadConfig(rootDir)
   const deps = {

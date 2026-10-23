@@ -119,4 +119,11 @@ describe('loadConfig', () => {
 
     expect(loadConfig(tmp)).toEqual({ verificationDeploymentId: 'AKfycb_X' })
   })
+
+  it('blames broken JSON instead of pointing at the setup', () => {
+    const tmp = mkdtempSync(path.join(os.tmpdir(), 'ship-config-'))
+    writeFileSync(path.join(tmp, 'ship.config.json'), '{ oops')
+
+    expect(() => loadConfig(tmp)).toThrow(/JSON/)
+  })
 })

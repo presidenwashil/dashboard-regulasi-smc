@@ -5,16 +5,16 @@
 // 2. Creates the **verification deployment** for the sibling Apps Script
 //    project (a NEW deployment; the production deployment and every other
 //    existing deployment are left untouched).
-// 3. Writes the deployment id into this repo's ship.config.json.
+// 3. Writes the deployment id into this repo's ship.config.json and opens
+//    the verification web app for a first look.
 //
-// Run once from the repo root: `npm run ship:setup`
+// Run once from the repo root: `npm run ship:setup` — idempotent (an existing
+// ship.config.json is kept).
 import { existsSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 import { runCommand } from './lib/spawn.mjs'
-
-const CONFIG_FILE = 'ship.config.json'
-const SIBLING_REPO = 'bank-dokumen'
+import { CONFIG_FILE, repoRoot, SIBLING_REPO, siblingRepo, VERIFICATION_DESCRIPTION } from './lib/config.mjs'
 
 export function deploymentIdFromDeployOutput(output) {
   const match = output.match(/AKfycb[\w-]+/)
@@ -26,23 +26,28 @@ export function configPath(rootDir) {
 }
 
 function main() {
-  const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
-  const siblingRepo = path.resolve(rootDir, '..', SIBLING_REPO)
+  const rootDir = repoRoot()
+  const sibling = siblingRepo(rootDir)
   const log = (line) => console.log(line)
+  const stop = (lines) => {
+    for (const line of lines) log(line)
+    process.exitCode = 1
+  }
 
-  if (!existsSync(path.join(siblingRepo, '.clasp.json'))) {
-    throw new Error(`No .clasp.json in ${siblingRepo} — is the sibling Apps Script repo checked out?`)
+  if (!existsSync(path.join(sibling, '.clasp.json'))) {
+    throw new Error(`No .clasp.json in ${sibling} — is the sibling Apps Script repo checked out?`)
   }
 
   const who = runCommand('clasp', ['show-authorized-user'], {
-    cwd: siblingRepo,
+    cwd: sibling,
     encoding: 'utf8',
   })
   if (who.status !== 0) {
-    log('✗ clasp is not authenticated. clasp login is a human-only step:')
-    log('  open a terminal in the Apps Script repo and run `clasp login` (browser flow),')
-    log('  then re-run `npm run ship:setup`. Details: docs/ship.md')
-    process.exitCode = 1
+    stop([
+      '✗ clasp is not authenticated. clasp login is a human-only step:',
+      '  open a terminal in the Apps Script repo and run `clasp login` (browser flow),',
+      '  then re-run `npm run ship:setup`. Details: docs/ship.md',
+    ])
     return
   }
   log(who.stdout.trim())
@@ -53,21 +58,22 @@ function main() {
   }
 
   log('Creating the verification deployment (a NEW deployment; production is untouched)...')
-  const deploy = runCommand(
-    'clasp',
-    ['deploy', '-d', 'verification: React replatform client'],
-    { cwd: siblingRepo, encoding: 'utf8' },
-  )
+  const deploy = runCommand('clasp', ['deploy', '-d', VERIFICATION_DESCRIPTION], {
+    cwd: sibling,
+    encoding: 'utf8',
+  })
   const output = `${deploy.stdout ?? ''}${deploy.stderr ?? ''}`
   if (deploy.status !== 0) {
-    log(`✗ clasp deploy failed:\n${output}`)
-    process.exitCode = 1
+    stop([
+      `✗ clasp deploy failed — see docs/ship.md for the human-only prerequisites`,
+      `  (clasp login, Apps Script API enabled):`,
+      output,
+    ])
     return
   }
   const deploymentId = deploymentIdFromDeployOutput(output)
   if (!deploymentId) {
-    log(`✗ Could not read a deployment id from clasp output:\n${output}`)
-    process.exitCode = 1
+    stop([`✗ Could not read a deployment id from clasp output:`, output])
     return
   }
 
@@ -77,12 +83,12 @@ function main() {
   )
   log(`✔ Verification deployment ${deploymentId} created and saved to ${CONFIG_FILE}.`)
   log('Commit ship.config.json, then ship with `npm run ship`.')
-  log(urlHint(deploymentId, siblingRepo))
+  log(openVerificationApp(deploymentId, sibling))
 }
 
-function urlHint(deploymentId, siblingRepo) {
+function openVerificationApp(deploymentId, siblingRepoDir) {
   const open = runCommand('clasp', ['open-web-app', deploymentId], {
-    cwd: siblingRepo,
+    cwd: siblingRepoDir,
     encoding: 'utf8',
     stdio: 'ignore',
   })

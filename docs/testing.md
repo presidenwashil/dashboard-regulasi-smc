@@ -18,6 +18,9 @@ ticket. The rules below are the concrete application of the decisions in spec
 - Tests are **colocated** with the code they pin: `src/<area>/<module>.test.ts[x]`
   (e.g. `src/adapter/normalize.test.ts`, `src/app/app.test.tsx`). Vitest default
   include finds anything `*.test.*`.
+- Node tooling under `scripts/` is not app source: it follows the same
+  colocated pattern (`scripts/<tool>.test.mjs`), established by the
+  ship-pipeline slice (ticket #3).
 - Fidelity suites for a sub-package may live alongside it with a `.fidelity.test.ts`
   suffix (`src/adapter/mock/backend.fidelity.test.ts`).
 - Shared setup lives in `src/test/setup.ts`. Do not add global mocks there per-test.
