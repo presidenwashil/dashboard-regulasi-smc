@@ -33,7 +33,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     } as unknown as Backend;
     const onSessionExpired = vi.fn();
     const api = createApi(backend, { onSessionExpired });
-    await expect(api.getAllData("tok")).rejects.toMatchObject({ sessionExpired: true });
+    await expect(api.getAllData()).rejects.toMatchObject({ sessionExpired: true });
     expect(onSessionExpired).toHaveBeenCalledTimes(1);
   });
 
@@ -43,7 +43,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     } as unknown as Backend;
     const onSessionExpired = vi.fn();
     const api = createApi(backend, { onSessionExpired });
-    await expect(api.getAllData("tok")).rejects.toThrow();
+    await expect(api.getAllData()).rejects.toThrow();
     expect(onSessionExpired).not.toHaveBeenCalled();
   });
 
@@ -76,6 +76,21 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     await api.markDocumentRead("tok-9", 7, "Pedoman Contoh");
     expect(calls).toContainEqual(["getAllUsers", "tok-9"]);
     expect(calls).toContainEqual(["markDocumentRead", "tok-9", 7, "Pedoman Contoh"]);
+  });
+
+  it("logs out the whole Sesi while the token stays inside the seam", async () => {
+    const calls: unknown[][] = [];
+    const backend = new Proxy({} as Backend, {
+      get(_target, fnName) {
+        return (...args: unknown[]) => {
+          calls.push([fnName, ...args]);
+          return { success: true };
+        };
+      },
+    });
+    const api = createApi(backend);
+    await api.logoutSesi({ token: "tok-9", user: { nrp: "0042", nama: "Dr. Farah" } as never });
+    expect(calls).toContainEqual(["logoutSession", "tok-9"]);
   });
 
   it("registers a new account and surfaces the success message, normalizing the NRP input", async () => {

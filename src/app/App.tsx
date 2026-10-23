@@ -36,10 +36,9 @@ export function App({
   });
 
   async function handleLogout(): Promise<void> {
-    const current = sesi;
-    if (current?.token) {
+    if (sesi) {
       try {
-        await apiRef.current?.logoutSession(current.token);
+        await apiRef.current?.logoutSesi(sesi);
       } catch {
         // Server already forgot the sesi or is unreachable; clear locally regardless.
       }

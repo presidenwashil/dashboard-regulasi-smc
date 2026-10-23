@@ -86,7 +86,7 @@ describe("mock fidelity: role gates and session handling", () => {
 
   it("flags unknown or logged-out sessions as expired on protected calls", async () => {
     const sesi = await farah();
-    await api.logoutSession(sesi.token);
+    await api.logoutSesi(sesi);
     const onExpiredCalls: string[] = [];
     const freshApi = createApi(backend, { onSessionExpired: () => onExpiredCalls.push("x") });
     await expect(freshApi.getMyReadDocs(sesi.token)).rejects.toMatchObject({

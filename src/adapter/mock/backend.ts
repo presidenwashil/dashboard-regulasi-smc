@@ -8,8 +8,6 @@ import type { Sesi, User } from "../types";
  * server (Code.js source of truth). Pinned by mock fidelity tests.
  */
 
-const SESSION_DURATION_SECONDS = 21600; // 6 jam, as the server.
-
 const SESSION_REQUIRED = (message = "Sesi tidak valid, silakan login ulang.") => ({
   success: false,
   message,
@@ -28,19 +26,27 @@ export type MockBackend = Record<string, (...args: unknown[]) => unknown> & {
 
 export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): MockBackend {
   const seed: MockSeed = seedInput;
-  const sessions = new Map<string, { user: User; expiresAt: number }>();
+  const sessions = new Map<string, User>();
 
-  function sessionFor(token: unknown) {
-    const key = normNrp(token);
-    const session = sessions.get(key);
-    if (!session) return null;
-    return session;
+  function sessionUser(token: unknown): User | null {
+    return sessions.get(String(token)) ?? null;
   }
 
-  function requireSession(token: unknown) {
-    const session = sessionFor(token);
-    if (!session) return null;
-    return session.user;
+  /**
+   * The repeated Admin gate, deduplicated: yields the logged-in Admin, or the
+   * same envelope the real server returns (session-expired / access denied).
+   * `if (!access.user) return access.response;` narrows `access.user` to User.
+   */
+  type GateEnvelope = { success: boolean; message: string; sessionExpired?: boolean };
+  type AdminAccess =
+    | { user: User; response: null }
+    | { user: null; response: GateEnvelope };
+
+  function requireAdmin(token: unknown): AdminAccess {
+    const user = sessionUser(token);
+    if (!user) return { user: null, response: SESSION_REQUIRED() };
+    if (user.role !== "Admin") return { user: null, response: ACCESS_DENIED };
+    return { user, response: null };
   }
 
   function docRawRows(): Array<Array<unknown>> {
@@ -98,7 +104,7 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
         unit: user.unit || "", nrp, role: user.role,
       };
       const token = `demo-${nrp}-${Math.random().toString(36).slice(2)}`;
-      sessions.set(token, { user: userInfo, expiresAt: Date.now() + SESSION_DURATION_SECONDS * 1000 });
+      sessions.set(token, userInfo);
       return { success: true, token, user: userInfo };
     },
 
@@ -116,7 +122,7 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     /* ==================== TRACKER SOSIALISASI ==================== */
 
     markDocumentRead(token: string, docRowIndex: unknown, judulDokumen: string) {
-      const user = requireSession(token);
+      const user = sessionUser(token);
       if (!user) return SESSION_REQUIRED();
       const myNrp = normNrp(user.nrp);
       const docIndex = Number(docRowIndex);
@@ -131,7 +137,7 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     },
 
     getMyReadDocs(token: string) {
-      const user = requireSession(token);
+      const user = sessionUser(token);
       if (!user) return SESSION_REQUIRED();
       const myNrp = normNrp(user.nrp);
       const readDocs: number[] = [];
@@ -144,9 +150,8 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     },
 
     getSosialisasiSummary(token: string) {
-      const user = requireSession(token);
-      if (!user) return SESSION_REQUIRED();
-      if (user.role !== "Admin") return ACCESS_DENIED;
+      const access = requireAdmin(token);
+      if (!access.user) return access.response;
       const approved = seed.users.filter((u) => u.status === "Approved");
       const approvedNrps = new Set(approved.map((u) => normNrp(u.nrp)));
       const readMap: Record<string, Record<string, number>> = {};
@@ -166,9 +171,8 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     },
 
     getSosialisasiDetail(token: string, docRowIndex: unknown) {
-      const user = requireSession(token);
-      if (!user) return SESSION_REQUIRED();
-      if (user.role !== "Admin") return ACCESS_DENIED;
+      const access = requireAdmin(token);
+      if (!access.user) return access.response;
       const docIndex = Number(docRowIndex);
       const doc = seed.documents[docIndex - 2];
       if (!doc) {
@@ -202,9 +206,8 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     },
 
     generateSosialisasiPdf(token: string, docRowIndex: unknown) {
-      const user = requireSession(token);
-      if (!user) return SESSION_REQUIRED();
-      if (user.role !== "Admin") return ACCESS_DENIED;
+      const access = requireAdmin(token);
+      if (!access.user) return access.response;
       const docIndex = Number(docRowIndex);
       const detail = this.getSosialisasiDetail(token, docIndex) as {
         success: boolean;
@@ -223,7 +226,7 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     /* ==================== STATISTIK (Dashboard) ==================== */
 
     getUserStats(token: string) {
-      const user = requireSession(token);
+      const user = sessionUser(token);
       if (!user) return SESSION_REQUIRED();
       const byBidang: Record<string, number> = {};
       const byUnit: Record<string, number> = {};
@@ -242,9 +245,8 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     /* ==================== ADMIN: APPROVAL ==================== */
 
     getPendingUsers(token: string) {
-      const user = requireSession(token);
-      if (!user) return SESSION_REQUIRED();
-      if (user.role !== "Admin") return ACCESS_DENIED;
+      const access = requireAdmin(token);
+      if (!access.user) return access.response;
       const pending = seed.users
         .map((u, index) => ({ row: u, rowIndex: index + 2 }))
         .filter(({ row }) => row.status === "Pending")
@@ -255,9 +257,8 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     },
 
     setUserStatus(token: string, rowIndex: unknown, newStatus: string) {
-      const user = requireSession(token);
-      if (!user) return SESSION_REQUIRED();
-      if (user.role !== "Admin") return ACCESS_DENIED;
+      const access = requireAdmin(token);
+      if (!access.user) return access.response;
       const position = Number(rowIndex) - 2;
       const target = seed.users[position];
       if (!target) {
@@ -268,9 +269,8 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     },
 
     getAllUsers(token: string) {
-      const user = requireSession(token);
-      if (!user) return SESSION_REQUIRED();
-      if (user.role !== "Admin") return ACCESS_DENIED;
+      const access = requireAdmin(token);
+      if (!access.user) return access.response;
       const users = seed.users.map((u, index) => ({
         rowIndex: index + 2, nama: u.nama, profesi: u.profesi, bidang: u.bidang, unit: u.unit,
         nrp: normNrp(u.nrp), status: u.status, role: u.role,
@@ -279,9 +279,8 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     },
 
     resetUserPassword(token: string, rowIndex: unknown, newPassword: string) {
-      const user = requireSession(token);
-      if (!user) return SESSION_REQUIRED();
-      if (user.role !== "Admin") return ACCESS_DENIED;
+      const access = requireAdmin(token);
+      if (!access.user) return access.response;
       const pw = String(newPassword ?? "");
       if (pw.length < 6) {
         return { success: false, message: "Password baru minimal 6 karakter." };
@@ -297,7 +296,7 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     /* ==================== DOKUMEN REGULASI ==================== */
 
     saveDataWithFiles(token: string, data: Record<string, unknown>) {
-      const user = requireSession(token);
+      const user = sessionUser(token);
       if (!user) return SESSION_REQUIRED();
       seed.documents.push([
         Date.now(),
@@ -311,7 +310,7 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     },
 
     updateDataWithFiles(token: string, data: Record<string, unknown>, rowIndex: unknown) {
-      const user = requireSession(token);
+      const user = sessionUser(token);
       if (!user) return SESSION_REQUIRED();
       const position = Number(rowIndex) - 2;
       const existing = seed.documents[position];
@@ -324,8 +323,8 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
         String(data.pemilik ?? existing[4]), String(data.unit ?? existing[5]), String(data.bidang ?? existing[6]),
         String(data.status ?? existing[7]), data.revisi ?? existing[8], data.tanggal ?? existing[9],
         // Files omitted on edit keep the existing drive links (frozen contract).
-        data.pdfFile ? "[ Porto baru: pdf tersimpan ]" : (data.existingPdfUrl ?? existing[10] ?? ""),
-        data.wordFile ? "[ file baru: word tersimpan ]" : (data.existingWordUrl ?? existing[11] ?? ""),
+        data.pdfFile ? "https://docs.google.com/document/d/mock-new-pdf" : (data.existingPdfUrl ?? existing[10] ?? ""),
+        data.wordFile ? "https://docs.google.com/document/d/mock-new-word" : (data.existingWordUrl ?? existing[11] ?? ""),
         String(data.akreditasi ?? existing[12]), String(data.keterangan ?? existing[13]),
         String(data.statusBerlaku ?? existing[14] ?? "Aktif"),
       ];
@@ -346,7 +345,7 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
         unit: user.unit || "", nrp: normNrp(user.nrp), role: user.role,
       };
       const token = `dev-${normNrp(nrp)}-${Math.random().toString(36).slice(2)}`;
-      sessions.set(token, { user: userInfo, expiresAt: Date.now() + SESSION_DURATION_SECONDS * 1000 });
+      sessions.set(token, userInfo);
       return { user: userInfo, token };
     },
 

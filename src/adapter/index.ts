@@ -39,14 +39,14 @@ const CONNECTION_ERROR = "Koneksi error, coba lagi.";
 export type Adapter = {
   /** Log in with NRP + password; resolves the Sesi to keep in session storage. */
   loginUser(nrp: string, password: string): Promise<Sesi>;
+  /** End the Sesi server-side; UI hands over the whole Sesi, never the token. */
+  logoutSesi(sesi: Sesi): Promise<void>;
   /** Self-service Registrasi; resolves the server's success message. */
   registerUser(input: RegistrasiInput): Promise<string>;
-  /** End the Sesi on the server; safe if it already expired. */
-  logoutSession(token: string): Promise<void>;
   /** Public master list of Bidang (used by Registrasi and the Dokumen form). */
   getMasterBidang(): Promise<string[]>;
   /** All regulation documents, newest sheet row first, normalized. */
-  getAllData(token?: string): Promise<Dokumen[]>;
+  getAllData(): Promise<Dokumen[]>;
   /** Create a Dokumen with Drive-file upload payloads. */
   saveDataWithFiles(token: string, input: DokumenInput): Promise<string>;
   /** Edit a Dokumen; omitted files keep the existing Drive links. */
@@ -124,8 +124,9 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
       const response = await call<ServerEnvelope>("registerUser", { ...input, nrp });
       return response.message ?? "";
     },
-    async logoutSession(token) {
-      await call<ServerEnvelope>("logoutSession", token);
+    async logoutSesi(sesi) {
+      // The Sesi token stays inside the seam (GLOSSARY: avoid "token" in UI code).
+      await call<ServerEnvelope>("logoutSession", sesi.token);
     },
     async getMasterBidang() {
       const envelope = await call<ServerEnvelope>("getMasterBidang");
@@ -204,7 +205,15 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
     },
     async getPendingUsers(token) {
       const envelope = await call<ServerEnvelope>("getPendingUsers", token);
-      return (envelope.data as PendingUser[]) ?? [];
+      const rows = ((envelope.data as Array<Record<string, unknown>>) ?? []).map((row) => ({
+        rowIndex: Number(row.rowIndex),
+        nama: String(row.nama ?? ""),
+        profesi: String(row.profesi ?? ""),
+        bidang: String(row.bidang ?? ""),
+        unit: String(row.unit ?? ""),
+        nrp: String(row.nrp ?? "").trim(),
+      }));
+      return rows as PendingUser[];
     },
     async setUserStatus(token, rowIndex, newStatus) {
       const response = await call<ServerEnvelope>("setUserStatus", token, rowIndex, newStatus);
