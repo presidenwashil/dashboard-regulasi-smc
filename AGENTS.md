@@ -13,3 +13,7 @@ The default five-label triage vocabulary (`needs-triage`, `needs-info`, `ready-f
 ### Domain docs
 
 Single-context layout: one `GLOSSARY.md` at the repo root plus `docs/adr/`. See `docs/agents/domain.md`.
+
+### Environment quirks
+
+pwsh/rtk/WSL-bash/clasp gotchas that cost tool calls when relearned. See `docs/agents/environment.md`.
