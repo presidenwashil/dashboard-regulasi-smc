@@ -1,32 +1,36 @@
-# React + TypeScript + Vite
+# Dashboard Regulasi — React client
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The Vite + React + TypeScript client for the Dashboard Regulasi RS Samarinda
+Medika Citra hospital app, currently being replatformed from the vanilla
+Apps Script app in the sibling repo `../bank-dokumen` (the parity baseline).
 
-Currently, two official plugins are available:
+Canonical docs live here: `GLOSSARY.md` (domain language), `docs/adr/`
+(platform decisions), `docs/testing.md` (test conventions), `AGENTS.md` (agent
+guidance). The replatform spec and its tickets live as GitHub issues.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Commands
 
-## React Compiler
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | HMR dev server against the **mock backend** (seeded demo data; Admin/User role switcher in the bottom-right) |
+| `npm run build` | Typecheck + single-file self-contained production build (`dist/index.html`) |
+| `npm run typecheck` | `tsc -b` |
+| `npm run lint` | oxlint |
+| `npm run test` / `npm run test:watch` | Vitest suite (component + contract + mock fidelity) |
+| `npm run ship` | _(ticket #3)_ validate → build → copy to `../bank-dokumen/Index.html` → `clasp push` → update the verification deployment |
+| `npm run release` | _(final ticket)_ explicit-only production cutover |
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Production behavior (`google.script.run`) only exists inside the Apps Script
+sandbox — running `dist/index.html` outside it is intentionally unsupported.
 
-## Expanding the Oxlint configuration
+## Architecture
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+One seam between client and server: the **typed API adapter**
+(`src/adapter/`, ADR-0002). UI code only sees domain objects (`Dokumen`,
+`Sesi`, …) and public `'id'`-stable docId identities; legacy spreadsheet shapes
+never leave the adapter. Session expiry is centralized: the adapter raises the
+logout hook the app shell subscribes to.
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+The mock backend (`src/adapter/mock/`) faithfully mirrors `Code.js` contracts,
+including role gates and duplicate-sosialisasi collapse; its fidelity is pinned
+by tests.
