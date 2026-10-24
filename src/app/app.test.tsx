@@ -33,7 +33,7 @@ const FARAH_SESI: Sesi = {
 describe("App shell (bootstrap slice)", () => {
   it("shows the Login screen when no Sesi exists", () => {
     render(<App />);
-    expect(screen.getByRole("heading", { name: "Masuk" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Login" })).toBeInTheDocument();
     expect(screen.queryByText("Dr. Farah")).not.toBeInTheDocument();
   });
 
@@ -71,7 +71,7 @@ describe("App shell (bootstrap slice)", () => {
     render(<App {...props} />);
     await user.click(screen.getByRole("button", { name: "Admin" }));
     await user.click(screen.getByRole("button", { name: /keluar/i }));
-    expect(screen.getByRole("heading", { name: "Masuk" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Login" })).toBeInTheDocument();
     expect(loadSesi()).toBeNull();
   });
 
@@ -99,7 +99,7 @@ describe("App shell (bootstrap slice)", () => {
     });
 
     expect(screen.getByText("Sesi Anda telah berakhir, silakan login ulang.")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Masuk" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Login" })).toBeInTheDocument();
     expect(loadSesi()).toBeNull();
   });
 });

@@ -1,10 +1,11 @@
 import { useRef, useState, useEffect } from "react";
-import type { ReactNode, RefObject } from "react";
+import type { FormEvent, ReactNode, RefObject } from "react";
 import { Chart, registerables } from "chart.js";
 import { createDefaultAppApi, isDevBackend } from "../adapter/install";
 import type { ApiHooks } from "../adapter";
 import type { Adapter } from "../adapter";
 import type { Sesi } from "../adapter/types";
+import { AdapterError } from "../adapter/types";
 import { clearSesi, loadSesi, saveSesi } from "../sesi/sesi";
 import { ToastHost } from "./toast";
 import { showToast } from "./toast-bus";
@@ -34,11 +35,13 @@ export function App({
       showToast("Sesi Anda telah berakhir, silakan login ulang.", true);
     },
   });
+  // Assigned synchronously right above; stable across renders thereafter.
+  const api = apiRef.current!;
 
   async function handleLogout(): Promise<void> {
     if (sesi) {
       try {
-        await apiRef.current?.logoutSesi(sesi);
+        await api.logoutSesi(sesi);
       } catch {
         // Server already forgot the sesi or is unreachable; clear locally regardless.
       }
@@ -67,7 +70,7 @@ export function App({
           <TabPanel tab={currentTabId} />
         </>
       ) : (
-        <LoginScreen />
+        <LoginScreen api={api} onSesi={applySesi} />
       )}
       <RoleSwitcher onSesi={applySesi} />
       <ToastHost />
@@ -90,8 +93,8 @@ function AppHeader(): ReactNode {
 function UserBar({ sesi, onLogout }: { sesi: Sesi; onLogout: () => void }): ReactNode {
   return (
     <div className="flex items-center justify-between bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 mb-4 text-sm">
-      <div className="flex items-center gap-2">
-        <i className="ph ph-user-circle" aria-hidden />
+      <div className="flex items-center gap-2 text-gray-300">
+        <i className="ph ph-user-circle text-cyan-400 text-xl" aria-hidden />
         <span className="font-semibold" data-testid="user-bar-name">{sesi.user.nama}</span>
         <span className="text-xs bg-gray-700 px-2 py-0.5 rounded-full text-cyan-400" data-testid="user-bar-role">{sesi.user.role}</span>
       </div>
@@ -100,7 +103,7 @@ function UserBar({ sesi, onLogout }: { sesi: Sesi; onLogout: () => void }): Reac
         onClick={onLogout}
         className="text-red-400 hover:text-red-300 flex items-center gap-1 font-semibold"
       >
-        <i className="ph ph-sign-out" aria-hidden /> Keluar
+        <i className="ph ph-sign-out text-lg" aria-hidden /> Keluar
       </button>
     </div>
   );
@@ -153,17 +156,77 @@ function TabPanel({ tab }: { tab: TabId | null }): ReactNode {
   );
 }
 
-function LoginScreen(): ReactNode {
+function LoginScreen({ api, onSesi }: { api: Adapter; onSesi: (sesi: Sesi) => void }): ReactNode {
+  const [nrp, setNrp] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (busy) return;
+    setError(null);
+    setBusy(true);
+    try {
+      // The adapter trims the NRP itself (text, leading zeros preserved).
+      onSesi(await api.loginUser(nrp, password));
+    } catch (err) {
+      setError(err instanceof AdapterError ? err.message : "Koneksi error, coba lagi.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section className="bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl p-6 sm:p-8">
       <h2 className="text-lg font-bold text-gray-100 mb-5 flex items-center gap-2">
-        <i className="ph ph-sign-in" aria-hidden /> Masuk
+        <i className="ph ph-sign-in text-cyan-400 text-2xl" aria-hidden /> Login
       </h2>
-      <p className="text-sm text-gray-400">
-        Layar login NRP + password akan diporting pada slice Login &amp; Sesi berikutnya.
-      </p>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label htmlFor="login-nrp" className="block text-xs font-bold text-gray-400 uppercase mb-1">
+            NRP
+          </label>
+          <input
+            id="login-nrp"
+            type="text"
+            required
+            value={nrp}
+            onChange={(e) => setNrp(e.target.value)}
+            className="w-full px-4 py-2.5 rounded-lg text-sm"
+          />
+        </div>
+        <div>
+          <label htmlFor="login-password" className="block text-xs font-bold text-gray-400 uppercase mb-1">
+            Password
+          </label>
+          <input
+            id="login-password"
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full px-4 py-2.5 rounded-lg text-sm"
+          />
+        </div>
+        {error && (
+          <div
+            role="alert"
+            className="text-red-400 text-xs font-semibold bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2"
+          >
+            {error}
+          </div>
+        )}
+        <button
+          type="submit"
+          disabled={busy}
+          className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-3 rounded-xl shadow-lg transition-all disabled:opacity-60"
+        >
+          {busy ? "Memproses..." : "Masuk"}
+        </button>
+      </form>
       {isDevBackend && (
-        <p className="mt-3 text-xs text-cyan-400/80">
+        <p className="mt-5 text-xs text-cyan-400/80">
           Mode dev: gunakan role switcher di pojok kanan bawah untuk memulai demo sebagai Admin atau User.
         </p>
       )}
