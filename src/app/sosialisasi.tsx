@@ -6,7 +6,7 @@ import type { Dokumen } from "../adapter/types";
 export function SosialisasiList({ api, token }: { api: Adapter; token: string }): ReactNode {
   const [docs, setDocs] = useState<Dokumen[]>([]);
   const [readIds, setReadIds] = useState<number[]>([]);
-  const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
+  const [busyId, setBusyId] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -14,19 +14,19 @@ export function SosialisasiList({ api, token }: { api: Adapter; token: string })
     api.getMyReadDocs(token).then(setReadIds).catch(() => setReadIds([]));
   }, [api, token]);
 
-  async function confirmRead(docId: number, judul: string) {
-    if (busyIds.has(docId)) return;
-    setBusyIds(prev => new Set(prev).add(docId));
+  async function confirmRead(doc: Dokumen) {
+    if (busyId !== null || readIds.includes(doc.docId ?? 0)) return;
+    setBusyId(doc.docId ?? 0);
     try {
-      await api.markDocumentRead(token, docId, judul);
-      setReadIds(prev => [...prev, docId]);
+      await api.markDocumentRead(token, doc.docId ?? 0, doc.judul);
+      setReadIds(prev => [...prev, doc.docId ?? 0]);
       setMessage("Dokumen ditandai sudah dibaca.");
+      setTimeout(() => setMessage(null), 2500);
     } catch {
       setMessage("Gagal: coba lagi.");
+      setTimeout(() => setMessage(null), 2500);
     } finally {
-      setBusyIds(prev => {
-        const n = new Set(prev); n.delete(docId); return n;
-      });
+      setBusyId(null);
     }
   }
 
@@ -46,11 +46,11 @@ export function SosialisasiList({ api, token }: { api: Adapter; token: string })
                   <p className="text-xs text-gray-400">{doc.nomor} · {doc.jenis} · {doc.unit}</p>
                 </div>
                 <button
-                  onClick={() => confirmRead(doc.docId ?? 0, doc.judul)}
-                  disabled={isRead || busyIds.has(doc.docId ?? 0)}
+                  onClick={() => confirmRead(doc)}
+                  disabled={isRead || busyId !== null}
                   className={`text-xs font-bold px-3 py-1.5 rounded-lg ${isRead ? "bg-green-600 text-white" : "bg-cyan-600 hover:bg-cyan-500 text-white"}`}
                 >
-                  {isRead ? "Sudah Dibaca" : "Tandai Dibaca"}
+                  {isRead ? "Sudah Dibaca" : "Baca & Tandai"}
                 </button>
               </div>
             </div>
