@@ -4,6 +4,7 @@ import {
   Chart as ChartJS, ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend,
 } from 'chart.js';
 import App from './App';
+import '@phosphor-icons/web/regular';
 import './index.css';
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend);

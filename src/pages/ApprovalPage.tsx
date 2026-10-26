@@ -85,7 +85,7 @@ export default function ApprovalPage({ token, notify }: Props) {
           </button>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[700px]">
+          <table className="w-full text-left border-collapse min-w-175">
             <thead className="bg-gray-800 text-gray-400 text-xs uppercase tracking-wider font-bold border-b border-gray-700">
               <tr>
                 <th className="p-4">Nama</th><th className="p-4">Profesi</th><th className="p-4">Bidang</th>
@@ -127,7 +127,7 @@ export default function ApprovalPage({ token, notify }: Props) {
           </button>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[800px]">
+          <table className="w-full text-left border-collapse min-w-200">
             <thead className="bg-gray-800 text-gray-400 text-xs uppercase tracking-wider font-bold border-b border-gray-700">
               <tr>
                 <th className="p-4">Nama</th><th className="p-4">NRP</th><th className="p-4">Bidang</th><th className="p-4">Unit</th>
@@ -196,7 +196,7 @@ export default function ApprovalPage({ token, notify }: Props) {
           <div className="bg-gray-900/40 px-6 py-4 flex justify-end gap-3 border-t border-gray-700">
             <button type="button" onClick={() => setTarget(null)} className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-300 hover:bg-gray-700">Batal</button>
             <button type="submit" disabled={busy}
-              className="px-5 py-2 rounded-xl text-sm font-bold bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white disabled:opacity-60 flex items-center gap-2">
+              className="px-5 py-2 rounded-xl text-sm font-bold bg-linear-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white disabled:opacity-60 flex items-center gap-2">
               <i className="ph ph-key text-lg" /> {busy ? 'Memproses...' : 'Reset Password'}
             </button>
           </div>

@@ -163,7 +163,7 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
 
       <div className="bg-gray-800 p-5 rounded-2xl shadow-lg border border-gray-700 flex flex-wrap gap-4 items-end">
         {filterDefs.map(([key, lbl, def]) => (
-          <div key={key} className="flex-1 min-w-[180px]">
+          <div key={key} className="flex-1 min-w-45">
             <label className={labelCls}>{lbl}</label>
             <select className={selectCls} value={filter[key]} onChange={(e) => updateFilter({ [key]: e.target.value } as Partial<Filter>)}>
               <option value="ALL">{def}</option>
@@ -171,9 +171,9 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
             </select>
           </div>
         ))}
-        <div className="relative flex-1 min-w-[220px]">
+        <div className="relative flex-1 min-w-55">
           <label className={labelCls}>Cari Judul</label>
-          <i className="ph ph-magnifying-glass absolute left-3 top-[38px] text-gray-500 text-lg" />
+          <i className="ph ph-magnifying-glass absolute left-3 top-9.5 text-gray-500 text-lg" />
           <input
             className="w-full pl-10 pr-4 py-2 rounded-lg text-sm"
             placeholder="Cari judul dokumen..."
@@ -185,7 +185,7 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
 
       <div className="bg-gray-800 rounded-2xl shadow-lg overflow-hidden border border-gray-700">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1100px]">
+          <table className="w-full text-left border-collapse min-w-275">
             <thead className="bg-gray-800 text-gray-400 text-xs uppercase tracking-wider font-bold border-b border-gray-700">
               <tr>
                 {thSort('judul', 'Judul Dokumen')}
@@ -323,7 +323,7 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
             disabled={!agree || busy}
             className={`px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors ${
               agree && !busy
-                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white'
+                ? 'bg-linear-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white'
                 : 'bg-gray-700 text-gray-500 cursor-not-allowed'
             }`}
           >

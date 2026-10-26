@@ -6,8 +6,7 @@
   "scripts": {
     "build": "vite build && node scripts/copy-html.mjs",
     "dev": "vite",
-    "deploy:dev": "npm run build && clasp push -f && clasp deploy -d \"dev $(git rev-parse --short HEAD)\"",
-    "deploy:prod": "npm test && npm run build && clasp push -f && clasp deploy -i ID_DEPLOYMENT_PROD -d \"v3.0\"",
+    "deploy:dev": "npm typecheck && npm test && npm run build && clasp push -f",
     "lint": "oxlint",
     "preview": "vite preview",
     "typecheck": "tsc -b",
