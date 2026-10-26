@@ -11,6 +11,7 @@ import { ToastHost } from "./toast";
 import { showToast } from "./toast-bus";
 import { TAB_META, tabsForRole, type TabId } from "./tabs";
 import { RoleSwitcher } from "../dev/role-switcher";
+import { RegistrasiScreen } from "./registrasi";
 
 /**
  * App shell for the harness-bootstrap slice: tab-switched layout (no URL
@@ -62,15 +63,15 @@ export function App({
 
   return (
     <div className="min-h-screen max-w-6xl mx-auto px-3 py-4 sm:px-4">
-      <AppHeader />
       {sesi ? (
         <>
+          <AppHeader />
           <UserBar sesi={sesi} onLogout={handleLogout} />
           <TabBar tabs={tabs} active={currentTabId} onSelect={setActiveTab} />
           <TabPanel tab={currentTabId} />
         </>
       ) : (
-        <LoginScreen api={api} onSesi={applySesi} />
+        <AuthScreen api={api} onSesi={applySesi} />
       )}
       <RoleSwitcher onSesi={applySesi} />
       <ToastHost />
@@ -156,7 +157,46 @@ function TabPanel({ tab }: { tab: TabId | null }): ReactNode {
   );
 }
 
-function LoginScreen({ api, onSesi }: { api: Adapter; onSesi: (sesi: Sesi) => void }): ReactNode {
+type AuthView = "login" | "registrasi";
+
+/**
+ * Logged-out auth view, ported from the vanilla login section: centered SMC
+ * logo header above the auth box, and a toggle between login and the
+ * registration form.
+ */
+function AuthScreen({ api, onSesi }: { api: Adapter; onSesi: (sesi: Sesi) => void }): ReactNode {
+  const [view, setView] = useState<AuthView>("login");
+  return (
+    <>
+      <div className="text-center mb-6">
+        <img
+          src="https://drive.google.com/thumbnail?id=1OEJsSMUEl2AZbuRz5xyFUkh-R2RI6-U8&sz=w400"
+          alt="Logo SMC"
+          className="h-16 mx-auto mb-3 object-contain"
+        />
+        <h1 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
+          DASHBOARD REGULASI
+        </h1>
+        <p className="text-gray-400 text-sm">RS Samarinda Medika Citra</p>
+      </div>
+      {view === "login" ? (
+        <LoginScreen api={api} onSesi={onSesi} onRegister={() => setView("registrasi")} />
+      ) : (
+        <RegistrasiScreen api={api} onToggle={() => setView("login")} />
+      )}
+    </>
+  );
+}
+
+function LoginScreen({
+  api,
+  onSesi,
+  onRegister,
+}: {
+  api: Adapter;
+  onSesi: (sesi: Sesi) => void;
+  onRegister?: () => void;
+}): ReactNode {
   const [nrp, setNrp] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -228,6 +268,14 @@ function LoginScreen({ api, onSesi }: { api: Adapter; onSesi: (sesi: Sesi) => vo
       {isDevBackend && (
         <p className="mt-5 text-xs text-cyan-400/80">
           Mode dev: gunakan role switcher di pojok kanan bawah untuk memulai demo sebagai Admin atau User.
+        </p>
+      )}
+      {onRegister && (
+        <p className="text-center text-gray-400 text-xs mt-5">
+          Belum punya akun?{" "}
+          <button type="button" onClick={onRegister} className="text-cyan-400 font-bold hover:underline">
+            Daftar di sini
+          </button>
         </p>
       )}
     </section>

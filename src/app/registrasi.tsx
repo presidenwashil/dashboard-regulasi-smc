@@ -3,7 +3,7 @@ import type { FormEvent, ReactNode } from "react";
 import type { Adapter } from "../adapter";
 import { AdapterError } from "../adapter/types";
 
-export function RegistrasiScreen({ api }: { api: Adapter }): ReactNode {
+export function RegistrasiScreen({ api, onToggle }: { api: Adapter; onToggle?: () => void }): ReactNode {
   const [nama, setNama] = useState("");
   const [profesi, setProfesi] = useState("");
   const [bidang, setBidang] = useState("");
@@ -95,6 +95,14 @@ export function RegistrasiScreen({ api }: { api: Adapter }): ReactNode {
           {busy ? "Memproses..." : "Daftar"}
         </button>
       </form>
+      {onToggle && (
+        <p className="text-center text-gray-400 text-xs mt-5">
+          Sudah punya akun?{" "}
+          <button type="button" onClick={onToggle} className="text-cyan-400 font-bold hover:underline">
+            Masuk di sini
+          </button>
+        </p>
+      )}
     </section>
   );
 }
