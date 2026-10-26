@@ -76,6 +76,11 @@ export type Adapter = {
   getAllUsers(token: string): Promise<AdminUser[]>;
   /** Reset a User's password (Admin); never reveals the stored hash. */
   resetUserPassword(token: string, rowIndex: number, newPassword: string): Promise<string>;
+  /**
+   * DEV ONLY: dev role-switcher sesi against the mock backend. Absent on the
+   * GAS adapter (production), where the switcher renders nothing.
+   */
+  createDevSesi?(nrp: string): Promise<Sesi>;
 };
 
 function asBackendRecord<T>(backend: T): Record<string, (...args: unknown[]) => unknown> {
@@ -237,6 +242,13 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
       const response = await call<ServerEnvelope>("resetUserPassword", token, rowIndex, newPassword);
       return response.message ?? "";
     },
+    ...(typeof target.createDevSesi === "function"
+      ? {
+          async createDevSesi(nrp: string): Promise<Sesi> {
+            return (await target.createDevSesi(nrp)) as unknown as Sesi;
+          },
+        }
+      : {}),
   };
 }
 

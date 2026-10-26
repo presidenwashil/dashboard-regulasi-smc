@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
-import { Chart, registerables } from "chart.js";
+import { Chart, registerables, type ChartConfiguration } from "chart.js";
 import type { Adapter } from "../adapter";
 import type { Dokumen } from "../adapter/types";
 
@@ -33,6 +33,13 @@ export function Dashboard({ api, token }: { api: Adapter; token: string }): Reac
     chartsRef.current.forEach(c => c.destroy());
     chartsRef.current = [];
     if (!docs.length && !stats) return;
+    // jsdom has no 2d canvas; pixel rendering only happens on the deployed app.
+    const make = (canvas: HTMLCanvasElement, config: ChartConfiguration): Chart | null => {
+      if (!canvas.getContext("2d")) return null;
+      const c = new Chart(canvas, config);
+      chartsRef.current.push(c);
+      return c;
+    };
     const opts = { responsive: true, plugins: { legend: { labels: { color: "#94a3b8" } } } };
     const grid = { color: "#334155" };
 
@@ -40,40 +47,34 @@ export function Dashboard({ api, token }: { api: Adapter; token: string }): Reac
     if (statusRef.current) {
       const counts: Record<string, number> = {};
       docs.forEach(d => { const k = d.statusBerlaku || "Aktif"; counts[k] = (counts[k] ?? 0) + 1; });
-      const c = new Chart(statusRef.current, { type: "pie", data: { labels: Object.keys(counts), datasets: [{ data: Object.values(counts), backgroundColor: PALETTE }] }, options: opts });
-      chartsRef.current.push(c);
+      make(statusRef.current, { type: "pie", data: { labels: Object.keys(counts), datasets: [{ data: Object.values(counts), backgroundColor: PALETTE }] }, options: opts });
     }
     // jenis doughnut
     if (jenisRef.current) {
       const counts: Record<string, number> = {};
       docs.forEach(d => { counts[d.jenis] = (counts[d.jenis] ?? 0) + 1; });
-      const c = new Chart(jenisRef.current, { type: "doughnut", data: { labels: Object.keys(counts), datasets: [{ data: Object.values(counts), backgroundColor: PALETTE }] }, options: opts });
-      chartsRef.current.push(c);
+      make(jenisRef.current, { type: "doughnut", data: { labels: Object.keys(counts), datasets: [{ data: Object.values(counts), backgroundColor: PALETTE }] }, options: opts });
     }
     // pemilik bar
     if (pemilikRef.current) {
       const counts: Record<string, number> = {};
       docs.forEach(d => { counts[d.pemilik] = (counts[d.pemilik] ?? 0) + 1; });
-      const c = new Chart(pemilikRef.current, { type: "bar", data: { labels: Object.keys(counts), datasets: [{ label: "Dokumen", data: Object.values(counts), backgroundColor: PALETTE[0] }] }, options: { ...opts, scales: { x: { ticks: { color: "#94a3b8" }, grid }, y: { ticks: { color: "#94a3b8" }, grid } } } });
-      chartsRef.current.push(c);
+      make(pemilikRef.current, { type: "bar", data: { labels: Object.keys(counts), datasets: [{ label: "Dokumen", data: Object.values(counts), backgroundColor: PALETTE[0] }] }, options: { ...opts, scales: { x: { ticks: { color: "#94a3b8" }, grid }, y: { ticks: { color: "#94a3b8" }, grid } } } });
     }
     // top-5 unit horizontal bar
     if (topUnitRef.current) {
       const counts: Record<string, number> = {};
       docs.forEach(d => { counts[d.unit] = (counts[d.unit] ?? 0) + 1; });
       const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
-      const c = new Chart(topUnitRef.current, { type: "bar", data: { labels: top.map(t => t[0]), datasets: [{ label: "Dokumen", data: top.map(t => t[1]), backgroundColor: PALETTE[1] }] }, options: { indexAxis: "y", ...opts, scales: { x: { ticks: { color: "#94a3b8" }, grid }, y: { ticks: { color: "#94a3b8" }, grid } } } });
-      chartsRef.current.push(c);
+      make(topUnitRef.current, { type: "bar", data: { labels: top.map(t => t[0]), datasets: [{ label: "Dokumen", data: top.map(t => t[1]), backgroundColor: PALETTE[1] }] }, options: { indexAxis: "y", ...opts, scales: { x: { ticks: { color: "#94a3b8" }, grid }, y: { ticks: { color: "#94a3b8" }, grid } } } });
     }
     // users per bidang
     if (bidangRef.current && stats) {
-      const c = new Chart(bidangRef.current, { type: "bar", data: { labels: Object.keys(stats.byBidang), datasets: [{ label: "User", data: Object.values(stats.byBidang), backgroundColor: PALETTE[2] }] }, options: { ...opts, scales: { x: { ticks: { color: "#94a3b8" }, grid }, y: { ticks: { color: "#94a3b8" }, grid } } } });
-      chartsRef.current.push(c);
+      make(bidangRef.current, { type: "bar", data: { labels: Object.keys(stats.byBidang), datasets: [{ label: "User", data: Object.values(stats.byBidang), backgroundColor: PALETTE[2] }] }, options: { ...opts, scales: { x: { ticks: { color: "#94a3b8" }, grid }, y: { ticks: { color: "#94a3b8" }, grid } } } });
     }
     // users per unit
     if (unitRef.current && stats) {
-      const c = new Chart(unitRef.current, { type: "bar", data: { labels: Object.keys(stats.byUnit), datasets: [{ label: "User", data: Object.values(stats.byUnit), backgroundColor: PALETTE[3] }] }, options: { ...opts, scales: { x: { ticks: { color: "#94a3b8" }, grid }, y: { ticks: { color: "#94a3b8" }, grid } } } });
-      chartsRef.current.push(c);
+      make(unitRef.current, { type: "bar", data: { labels: Object.keys(stats.byUnit), datasets: [{ label: "User", data: Object.values(stats.byUnit), backgroundColor: PALETTE[3] }] }, options: { ...opts, scales: { x: { ticks: { color: "#94a3b8" }, grid }, y: { ticks: { color: "#94a3b8" }, grid } } } });
     }
     return () => { chartsRef.current.forEach(c => c.destroy()); chartsRef.current = []; };
   }, [docs, stats]);

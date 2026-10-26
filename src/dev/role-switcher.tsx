@@ -1,18 +1,19 @@
 import type { ReactNode } from "react";
-import { devMock } from "../adapter/install";
+import type { Adapter } from "../adapter";
 import type { Sesi } from "../adapter/types";
 
 /**
  * Dev-only Admin/User role switcher — launches the app as a seeded user
- * so every state is reachable without GAS or real data. Renders nothing
- * on the production (verification/release) build.
+ * so every state is reachable without GAS or real data. Joins the session
+ * through the same adapter the app uses, so token calls in dev stay
+ * consistent with the backend under test. Renders nothing when the adapter
+ * has no dev sesi (the production/release build).
  */
-export function RoleSwitcher({ onSesi }: { onSesi: (sesi: Sesi) => void }): ReactNode {
-  if (!devMock) return null;
-  const mock = devMock;
+export function RoleSwitcher({ api, onSesi }: { api: Adapter; onSesi: (sesi: Sesi) => void }): ReactNode {
+  if (!api.createDevSesi) return null;
 
   function switchTo(nrp: string): void {
-    onSesi(mock.createDevSesi(nrp));
+    void api.createDevSesi!(nrp).then(onSesi);
   }
 
   return (

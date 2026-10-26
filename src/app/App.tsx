@@ -1,6 +1,5 @@
-import { useRef, useState, useEffect } from "react";
-import type { FormEvent, ReactNode, RefObject } from "react";
-import { Chart, registerables } from "chart.js";
+import { useRef, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { createDefaultAppApi, isDevBackend } from "../adapter/install";
 import type { ApiHooks } from "../adapter";
 import type { Adapter } from "../adapter";
@@ -10,6 +9,7 @@ import { clearSesi, loadSesi, saveSesi } from "../sesi/sesi";
 import { ToastHost } from "./toast";
 import { showToast } from "./toast-bus";
 import { TAB_META, tabsForRole, type TabId } from "./tabs";
+import { Dashboard } from "./dashboard";
 import { RoleSwitcher } from "../dev/role-switcher";
 import { RegistrasiScreen } from "./registrasi";
 
@@ -68,12 +68,12 @@ export function App({
           <AppHeader />
           <UserBar sesi={sesi} onLogout={handleLogout} />
           <TabBar tabs={tabs} active={currentTabId} onSelect={setActiveTab} />
-          <TabPanel tab={currentTabId} />
+          <TabPanel tab={currentTabId} api={api} token={sesi.token} />
         </>
       ) : (
         <AuthScreen api={api} onSesi={applySesi} />
       )}
-      <RoleSwitcher onSesi={applySesi} />
+      <RoleSwitcher api={api} onSesi={applySesi} />
       <ToastHost />
     </div>
   );
@@ -143,10 +143,10 @@ function TabBar({
   );
 }
 
-function TabPanel({ tab }: { tab: TabId | null }): ReactNode {
+function TabPanel({ tab, api, token }: { tab: TabId | null; api: Adapter; token: string }): ReactNode {
   if (!tab) return null;
   const content: ReactNode =
-    tab === "dashboard" ? <DashboardPlaceholder /> : TAB_META[tab].placeholder;
+    tab === "dashboard" ? <Dashboard api={api} token={token} /> : TAB_META[tab].placeholder;
   return (
     <main className="bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl p-6 text-gray-300">
       <h2 className="text-lg font-bold text-gray-100 mb-2 flex items-center gap-2">
@@ -282,45 +282,3 @@ function LoginScreen({
   );
 }
 
-/**
- * Proves the Chart.js dependency + fixed chart defaults work inside the
- * single-file build (real dashboard charts land with ticket #12).
- */
-function DashboardPlaceholder(): ReactNode {
-  const canvasRef: RefObject<HTMLCanvasElement | null> = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const context = canvas.getContext("2d");
-    if (!context) return; // jsdom has no canvas; charts tested in their own slice
-    Chart.register(...registerables);
-    Chart.defaults.color = "#94a3b8";
-    Chart.defaults.borderColor = "#334155";
-    const chart = new Chart(canvas, {
-      type: "bar",
-      data: {
-        labels: ["SPO", "Pedoman", "SK"],
-        datasets: [
-          {
-            label: "Dokumen Aktif",
-            data: [1, 1, 1],
-            backgroundColor: ["#06b6d4", "#3b82f6", "#10b981"],
-            borderRadius: 6,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
-      },
-    });
-    return () => chart.destroy();
-  }, []);
-  return (
-    <div>
-      <p className="mb-4">Dashboard analitik (kartu statistik + 6 grafik) — dibangun pada ticket #12.</p>
-      <canvas ref={canvasRef} aria-label="Grafik demo" className="max-h-64" />
-    </div>
-  );
-}
