@@ -13,13 +13,8 @@ export default defineConfig({
     assetsInlineLimit: 100_000_000,
   },
   test: {
+    include: ['tests/react/**/*.test.{ts,tsx}', 'tests/gas/**/*.test.ts'],
+    setupFiles: ['tests/react/setup.ts'],
     environment: 'jsdom',
-    setupFiles: ['./src/test/setup.ts'],
-    // Always leave the machine-readable report behind (`.vitest/` is
-    // gitignored); agents parse it when tooling swallows stdout.
-    outputFile: { json: './.vitest/json/output.json' },
-    // One jsdom environment per worker instead of per file (~29 s of the
-    // 36 s suite was env-creation at 9 files), keeping per-file isolation.
-    pool: 'vmThreads',
   },
 })

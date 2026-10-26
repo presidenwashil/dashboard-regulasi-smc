@@ -1,14 +1,5 @@
 @import "tailwindcss";
 
-@import "./vendor/phosphor.css";
-
-/*
- * Theme tokens ported from the vanilla Tailwind CDN config, as-is
- * (darkMode: class was global there; the palette is reproduced exactly):
- *   gray: { 800: '#1e293b', 900: '#0f172a' }
- *   neon: { blue: '#3b82f6', cyan: '#06b6d4', emerald: '#10b981' }
- * Note: vanilla REMAPS Tailwind's default gray-800/900 to slate values.
- */
 @theme {
   --color-gray-800: #1e293b;
   --color-gray-900: #0f172a;
@@ -17,42 +8,22 @@
   --color-neon-emerald: #10b981;
 }
 
-/* Vanilla body + scrollbar treatment, as-is. */
-body {
-  background-color: #0f172a;
-  color: #f8fafc;
-  font-family: theme(--font-sans), ui-sans-serif, system-ui, sans-serif;
-}
+/* Variant dark: versi asli memakai class="dark" di <html>, sehingga selector ini dibutuhkan */
+@custom-variant dark (&:where(.dark, .dark *));
 
+body { background-color: #0f172a; color: #f8fafc; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: #1e293b; }
 ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #64748b; }
-
-/* Tab treatment ported from the vanilla app. */
-.tab-active {
-  background-color: #0ea5e9;
-  color: white;
-  border-color: #0284c7;
-  box-shadow: 0 0 15px rgba(14, 165, 233, 0.5);
-}
-.tab-inactive {
-  background-color: #1e293b;
-  color: #94a3b8;
-  border-color: #334155;
-}
-
-/* Input treatment ported from the vanilla app. */
-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea {
-  background-color: #0f172a;
-  color: #f8fafc;
-  border: 1px solid #475569;
-  border-radius: 0.5rem;
-}
-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus, select:focus, textarea:focus {
-  border-color: #06b6d4;
-  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.3);
-  outline: none;
-}
-
 .checkbox-custom { accent-color: #06b6d4; width: 1.1rem; height: 1.1rem; cursor: pointer; }
+.tab-active { background-color: #0ea5e9; color: #fff; border-color: #0284c7; box-shadow: 0 0 15px rgba(14,165,233,.5); }
+.tab-inactive { background-color: #1e293b; color: #94a3b8; border-color: #334155; }
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea {
+  background-color: #0f172a !important; color: #f8fafc !important;
+  border: 1px solid #475569 !important; border-radius: .5rem;
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+select:focus, textarea:focus {
+  border-color: #06b6d4 !important; box-shadow: 0 0 0 2px rgba(6,182,212,.3) !important; outline: none;
+}

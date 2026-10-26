@@ -4,22 +4,21 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "build": "vite build && node scripts/copy-html.mjs",
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "deploy:dev": "npm run build && clasp push -f && clasp deploy -d \"dev $(git rev-parse --short HEAD)\"",
+    "deploy:prod": "npm test && npm run build && clasp push -f && clasp deploy -i ID_DEPLOYMENT_PROD -d \"v3.0\"",
     "lint": "oxlint",
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "prepare": "husky",
-    "ship:setup": "node scripts/ship-setup.mjs",
-    "ship": "node scripts/ship.mjs",
-    "prepare": "husky"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@phosphor-icons/web": "^2.1.2",
     "chart.js": "^4.6.1",
     "react": "^19.3.1",
+    "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
