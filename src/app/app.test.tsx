@@ -81,7 +81,11 @@ describe("App shell (bootstrap slice)", () => {
     render(<App {...props} />);
     await user.click(screen.getByRole("button", { name: "User" }));
     await user.click(screen.getByRole("tab", { name: "Dashboard" }));
-    expect(screen.getByText(/dibangun pada ticket #12/i)).toBeInTheDocument();
+    // The dashboard tab serves the real analytics (ticket #12), not the placeholder.
+    expect(screen.getByRole("heading", { name: "Dashboard Analitik" })).toBeInTheDocument();
+    expect(screen.getByText("Total Dokumen")).toBeInTheDocument();
+    expect(screen.getByText("Total User Aktif")).toBeInTheDocument();
+    expect(screen.queryByText(/dibangun pada ticket #12/i)).not.toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Sosialisasi" }));
     expect(screen.getByText(/dibangun pada ticket #6/i)).toBeInTheDocument();
   });

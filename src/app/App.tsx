@@ -1,6 +1,5 @@
-import { useRef, useState, useEffect } from "react";
-import type { FormEvent, ReactNode, RefObject } from "react";
-import { Chart, registerables } from "chart.js";
+import { useRef, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { createDefaultAppApi, isDevBackend } from "../adapter/install";
 import type { ApiHooks } from "../adapter";
 import type { Adapter } from "../adapter";
@@ -10,7 +9,9 @@ import { clearSesi, loadSesi, saveSesi } from "../sesi/sesi";
 import { ToastHost } from "./toast";
 import { showToast } from "./toast-bus";
 import { TAB_META, tabsForRole, type TabId } from "./tabs";
+import { Dashboard } from "./dashboard";
 import { RoleSwitcher } from "../dev/role-switcher";
+import { RegistrasiScreen } from "./registrasi";
 
 /**
  * App shell for the harness-bootstrap slice: tab-switched layout (no URL
@@ -62,17 +63,17 @@ export function App({
 
   return (
     <div className="min-h-screen max-w-6xl mx-auto px-3 py-4 sm:px-4">
-      <AppHeader />
       {sesi ? (
         <>
+          <AppHeader />
           <UserBar sesi={sesi} onLogout={handleLogout} />
           <TabBar tabs={tabs} active={currentTabId} onSelect={setActiveTab} />
-          <TabPanel tab={currentTabId} />
+          <TabPanel tab={currentTabId} api={api} token={sesi.token} />
         </>
       ) : (
-        <LoginScreen api={api} onSesi={applySesi} />
+        <AuthScreen api={api} onSesi={applySesi} />
       )}
-      <RoleSwitcher onSesi={applySesi} />
+      <RoleSwitcher api={api} onSesi={applySesi} />
       <ToastHost />
     </div>
   );
@@ -142,10 +143,10 @@ function TabBar({
   );
 }
 
-function TabPanel({ tab }: { tab: TabId | null }): ReactNode {
+function TabPanel({ tab, api, token }: { tab: TabId | null; api: Adapter; token: string }): ReactNode {
   if (!tab) return null;
   const content: ReactNode =
-    tab === "dashboard" ? <DashboardPlaceholder /> : TAB_META[tab].placeholder;
+    tab === "dashboard" ? <Dashboard api={api} token={token} /> : TAB_META[tab].placeholder;
   return (
     <main className="bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl p-6 text-gray-300">
       <h2 className="text-lg font-bold text-gray-100 mb-2 flex items-center gap-2">
@@ -156,7 +157,46 @@ function TabPanel({ tab }: { tab: TabId | null }): ReactNode {
   );
 }
 
-function LoginScreen({ api, onSesi }: { api: Adapter; onSesi: (sesi: Sesi) => void }): ReactNode {
+type AuthView = "login" | "registrasi";
+
+/**
+ * Logged-out auth view, ported from the vanilla login section: centered SMC
+ * logo header above the auth box, and a toggle between login and the
+ * registration form.
+ */
+function AuthScreen({ api, onSesi }: { api: Adapter; onSesi: (sesi: Sesi) => void }): ReactNode {
+  const [view, setView] = useState<AuthView>("login");
+  return (
+    <>
+      <div className="text-center mb-6">
+        <img
+          src="https://drive.google.com/thumbnail?id=1OEJsSMUEl2AZbuRz5xyFUkh-R2RI6-U8&sz=w400"
+          alt="Logo SMC"
+          className="h-16 mx-auto mb-3 object-contain"
+        />
+        <h1 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
+          DASHBOARD REGULASI
+        </h1>
+        <p className="text-gray-400 text-sm">RS Samarinda Medika Citra</p>
+      </div>
+      {view === "login" ? (
+        <LoginScreen api={api} onSesi={onSesi} onRegister={() => setView("registrasi")} />
+      ) : (
+        <RegistrasiScreen api={api} onToggle={() => setView("login")} />
+      )}
+    </>
+  );
+}
+
+function LoginScreen({
+  api,
+  onSesi,
+  onRegister,
+}: {
+  api: Adapter;
+  onSesi: (sesi: Sesi) => void;
+  onRegister?: () => void;
+}): ReactNode {
   const [nrp, setNrp] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -230,49 +270,15 @@ function LoginScreen({ api, onSesi }: { api: Adapter; onSesi: (sesi: Sesi) => vo
           Mode dev: gunakan role switcher di pojok kanan bawah untuk memulai demo sebagai Admin atau User.
         </p>
       )}
+      {onRegister && (
+        <p className="text-center text-gray-400 text-xs mt-5">
+          Belum punya akun?{" "}
+          <button type="button" onClick={onRegister} className="text-cyan-400 font-bold hover:underline">
+            Daftar di sini
+          </button>
+        </p>
+      )}
     </section>
   );
 }
 
-/**
- * Proves the Chart.js dependency + fixed chart defaults work inside the
- * single-file build (real dashboard charts land with ticket #12).
- */
-function DashboardPlaceholder(): ReactNode {
-  const canvasRef: RefObject<HTMLCanvasElement | null> = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const context = canvas.getContext("2d");
-    if (!context) return; // jsdom has no canvas; charts tested in their own slice
-    Chart.register(...registerables);
-    Chart.defaults.color = "#94a3b8";
-    Chart.defaults.borderColor = "#334155";
-    const chart = new Chart(canvas, {
-      type: "bar",
-      data: {
-        labels: ["SPO", "Pedoman", "SK"],
-        datasets: [
-          {
-            label: "Dokumen Aktif",
-            data: [1, 1, 1],
-            backgroundColor: ["#06b6d4", "#3b82f6", "#10b981"],
-            borderRadius: 6,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
-      },
-    });
-    return () => chart.destroy();
-  }, []);
-  return (
-    <div>
-      <p className="mb-4">Dashboard analitik (kartu statistik + 6 grafik) — dibangun pada ticket #12.</p>
-      <canvas ref={canvasRef} aria-label="Grafik demo" className="max-h-64" />
-    </div>
-  );
-}

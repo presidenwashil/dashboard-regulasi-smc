@@ -34,6 +34,26 @@ describe("Login screen (Login & Sesi slice)", () => {
     expect(loadSesi()).toBeNull();
   });
 
+  it("renders the vanilla auth header (logo SMC + title + hospital) above the login box", () => {
+    const { props } = bootAppWithMockBackend();
+    render(<App {...props} />);
+    expect(screen.getByAltText("Logo SMC")).toHaveAttribute(
+      "src",
+      "https://drive.google.com/thumbnail?id=1OEJsSMUEl2AZbuRz5xyFUkh-R2RI6-U8&sz=w400",
+    );
+    expect(screen.getByText("RS Samarinda Medika Citra")).toBeInTheDocument();
+  });
+
+  it("toggles to the Registrasi view via 'Daftar di sini' and back via 'Masuk di sini'", async () => {
+    const user = userEvent.setup();
+    const { props } = bootAppWithMockBackend();
+    render(<App {...props} />);
+    await user.click(screen.getByRole("button", { name: "Daftar di sini" }));
+    expect(screen.getByRole("heading", { name: /Registrasi Akun/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Masuk di sini" }));
+    expect(screen.getByRole("heading", { name: "Login" })).toBeInTheDocument();
+  });
+
   it("logs in an approved User through the adapter and lands in the app with the Sesi saved", async () => {
     const user = userEvent.setup();
     const { props } = bootAppWithMockBackend();
