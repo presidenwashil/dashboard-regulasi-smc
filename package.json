@@ -6,9 +6,11 @@
   "scripts": {
     "build": "vite build && node scripts/copy-html.mjs",
     "dev": "vite",
-    "deploy:dev": "npm typecheck && npm test && npm run build && clasp push -f",
+    "deploy:dev": "npm run typecheck && npm run lint && npm run test && npm run build && clasp push -f",
     "lint": "oxlint",
     "preview": "vite preview",
+    "ship": "node scripts/ship.mjs",
+    "ship:setup": "node scripts/ship-setup.mjs",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest"

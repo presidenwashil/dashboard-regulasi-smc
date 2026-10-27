@@ -19,6 +19,12 @@ describe("Sesi storage (sessionStorage persistence)", () => {
     expect(loadSesi()).toBeNull();
   });
 
+  it("clears the legacy session value during migration", () => {
+    sessionStorage.setItem("sessionData", JSON.stringify({ token: "old-token" }));
+    expect(loadSesi()).toBeNull();
+    expect(sessionStorage.getItem("sessionData")).toBeNull();
+  });
+
   it("returns null for malformed stored values instead of crashing", () => {
     sessionStorage.setItem("dashboard-regulasi-sesi", "{not json");
     expect(loadSesi()).toBeNull();

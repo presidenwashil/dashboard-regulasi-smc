@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pie, Doughnut, Bar } from 'react-chartjs-2';
 import type { ChartOptions } from 'chart.js';
-import { api } from '../api';
+import { useAdapter } from '../adapter/context';
 import { countBy } from '../utils';
-import type { Doc, Notify, UserStats } from '../types';
+import type { Dokumen, Sesi, UserStatsData } from '../adapter/types';
+import type { Notify } from '../components/Shared';
 
 const legendOpt = {
   responsive: true,
@@ -40,23 +41,24 @@ function Card({ title, className = '', children }: { title: string; className?: 
 }
 
 interface DashboardPageProps {
-  docs: Doc[];
-  token: string;
+  docs: Dokumen[];
+  sesi: Sesi;
   notify: Notify;
   onGoSosialisasi: () => void;
 }
 
-export default function DashboardPage({ docs, token, notify, onGoSosialisasi }: DashboardPageProps) {
-  const [stats, setStats] = useState<UserStats | null>(null);
+export default function DashboardPage({ docs, sesi, notify, onGoSosialisasi }: DashboardPageProps) {
+  const api = useAdapter();
+  const [stats, setStats] = useState<UserStatsData | null>(null);
 
   useEffect(() => {
-    api.getUserStats(token)
-      .then((r) => (r.success ? setStats(r) : notify(r.message ?? 'Gagal memuat statistik.', true)))
+    api.getUserStats(sesi)
+      .then(setStats)
       .catch((e: Error) => notify(e.message, true));
-  }, [token, notify]);
+  }, [api, sesi, notify]);
 
   const agg = useMemo(() => ({
-    status: sortDesc(countBy(docs, (d) => d.status)),
+    status: sortDesc(countBy(docs, (d) => d.statusDokumen)),
     jenis: sortDesc(countBy(docs, (d) => d.jenis)),
     pemilik: sortDesc(countBy(docs, (d) => d.pemilik)),
     topUnit: sortDesc(countBy(docs.filter((d) => d.unit && d.unit !== '-'), (d) => d.unit)).slice(0, 5),

@@ -1,8 +1,9 @@
 // `npm run ship` — the ship pipeline (ticket #3, ADR-0003).
 //
 // Gates: typecheck → lint → full test suite → build. Only if every gate
-// passes: build the single-file artifact, copy it over the Apps Script repo's
-// Index.html, `clasp push`, and redeploy ONLY the verification deployment.
+// passes: build the single-file artifact, copy it over the vendored GAS
+// backend's Index.html (gas/), `clasp push` via the root .clasp.json, and
+// redeploy ONLY the verification deployment.
 // Production is never touched by ship (its deployment is pinned to the
 // vanilla version for the whole migration — see docs/adr/0003).
 //
@@ -13,7 +14,7 @@ import { copyFileSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { runCommand } from './lib/spawn.mjs'
-import { CONFIG_FILE, repoRoot, siblingRepo, VERIFICATION_DESCRIPTION } from './lib/config.mjs'
+import { CONFIG_FILE, gasDir, repoRoot, VERIFICATION_DESCRIPTION } from './lib/config.mjs'
 
 export function loadConfig(rootDir) {
   const file = path.join(rootDir, CONFIG_FILE)
@@ -45,7 +46,7 @@ export function loadConfig(rootDir) {
 }
 
 export function buildSteps(rootDir, config) {
-  const sibling = siblingRepo(rootDir)
+  const gas = gasDir(rootDir)
   return [
     { name: 'typecheck', cmd: ['npm', 'run', 'typecheck'] },
     { name: 'lint', cmd: ['npm', 'run', 'lint'] },
@@ -55,14 +56,14 @@ export function buildSteps(rootDir, config) {
       name: 'copy artifact',
       copy: {
         src: path.join(rootDir, 'dist', 'index.html'),
-        dst: path.join(sibling, 'Index.html'),
+        dst: path.join(gas, 'Index.html'),
       },
     },
-    { name: 'clasp push', cmd: ['clasp', 'push'], cwd: sibling },
+    { name: 'clasp push', cmd: ['clasp', 'push'], cwd: rootDir },
     {
       name: 'redeploy verification',
       cmd: ['clasp', 'redeploy', config.verificationDeploymentId, '-d', VERIFICATION_DESCRIPTION],
-      cwd: sibling,
+      cwd: rootDir,
     },
   ]
 }

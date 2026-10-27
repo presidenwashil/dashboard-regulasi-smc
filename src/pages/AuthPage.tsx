@@ -1,7 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { api } from '../api';
 import { LOGO_SMC } from '../utils';
-import type { Notify, Session } from '../types';
+import type { Adapter } from '../adapter';
+import { useAdapter } from '../adapter/context';
+import type { Notify } from '../components/Shared';
+import type { Sesi } from '../adapter/types';
 
 const box = 'bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl p-6 sm:p-8';
 const label = 'block text-xs font-bold text-gray-400 uppercase mb-1';
@@ -12,11 +14,12 @@ const alertErr = 'text-red-400 text-xs font-semibold bg-red-500/10 border border
 const alertOk = 'text-emerald-400 text-xs font-semibold bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2';
 
 interface AuthPageProps {
-  onLogin: (s: Session) => void;
+  onLogin: (sesi: Sesi) => void;
   notify: Notify;
 }
 
 export default function AuthPage({ onLogin, notify }: AuthPageProps) {
+  const api = useAdapter();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -29,16 +32,16 @@ export default function AuthPage({ onLogin, notify }: AuthPageProps) {
           <p className="text-gray-400 text-sm">RS Samarinda Medika Citra</p>
         </div>
         {mode === 'login' ? (
-          <LoginForm onLogin={onLogin} onSwitch={() => setMode('register')} />
+          <LoginForm api={api} onLogin={onLogin} onSwitch={() => setMode('register')} />
         ) : (
-          <RegisterForm notify={notify} onSwitch={() => setMode('login')} />
+          <RegisterForm api={api} notify={notify} onSwitch={() => setMode('login')} />
         )}
       </div>
     </div>
   );
 }
 
-function LoginForm({ onLogin, onSwitch }: { onLogin: (s: Session) => void; onSwitch: () => void }) {
+function LoginForm({ api, onLogin, onSwitch }: { api: Adapter; onLogin: (sesi: Sesi) => void; onSwitch: () => void }) {
   const [nrp, setNrp] = useState('');
   const [pw, setPw] = useState('');
   const [err, setErr] = useState('');
@@ -49,11 +52,9 @@ function LoginForm({ onLogin, onSwitch }: { onLogin: (s: Session) => void; onSwi
     setErr('');
     setBusy(true);
     try {
-      const r = await api.login(nrp.trim(), pw);
-      if (!r.success || !r.user) throw new Error(r.message ?? 'Login gagal.');
-      onLogin({ ...r.user, token: r.token });
+      onLogin(await api.loginUser(nrp.trim(), pw));
     } catch (ex) {
-      setErr((ex as Error).message);
+      setErr(ex instanceof Error ? ex.message : String(ex));
       setBusy(false);
     }
   };
@@ -65,12 +66,12 @@ function LoginForm({ onLogin, onSwitch }: { onLogin: (s: Session) => void; onSwi
       </h2>
       <form onSubmit={submit} className="space-y-4">
         <div>
-          <label className={label}>NRP</label>
-          <input className={input} autoComplete="username" value={nrp} onChange={(e) => setNrp(e.target.value)} required />
+          <label htmlFor="login-nrp" className={label}>NRP</label>
+          <input id="login-nrp" className={input} autoComplete="username" value={nrp} onChange={(e) => setNrp(e.target.value)} required />
         </div>
         <div>
-          <label className={label}>Password</label>
-          <input type="password" autoComplete="current-password" className={input} value={pw} onChange={(e) => setPw(e.target.value)} required />
+          <label htmlFor="login-password" className={label}>Password</label>
+          <input id="login-password" type="password" autoComplete="current-password" className={input} value={pw} onChange={(e) => setPw(e.target.value)} required />
         </div>
         {err && <div className={alertErr}>{err}</div>}
         <button type="submit" disabled={busy} className={btn}>
@@ -97,7 +98,7 @@ interface RegForm {
 
 const EMPTY_REG: RegForm = { nama: '', profesi: '', bidang: '', unit: '', nrp: '', pw1: '', pw2: '' };
 
-function RegisterForm({ notify, onSwitch }: { notify: Notify; onSwitch: () => void }) {
+function RegisterForm({ api, notify, onSwitch }: { api: Adapter; notify: Notify; onSwitch: () => void }) {
   const [master, setMaster] = useState<string[]>([]);
   const [form, setForm] = useState<RegForm>(EMPTY_REG);
   const [err, setErr] = useState('');
@@ -106,9 +107,9 @@ function RegisterForm({ notify, onSwitch }: { notify: Notify; onSwitch: () => vo
 
   useEffect(() => {
     api.getMasterBidang()
-      .then((r) => (r.success && r.data ? setMaster(r.data) : notify(r.message ?? 'Gagal memuat bidang.', true)))
-      .catch((e: Error) => notify(e.message, true));
-  }, [notify]);
+      .then(setMaster)
+      .catch((error: unknown) => notify(error instanceof Error ? error.message : String(error), true));
+  }, [api, notify]);
 
   const set = (k: keyof RegForm) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -120,7 +121,7 @@ function RegisterForm({ notify, onSwitch }: { notify: Notify; onSwitch: () => vo
     if (form.pw1 !== form.pw2) return setErr('Password dan ulangi password tidak sama.');
     setBusy(true);
     try {
-      const r = await api.register({
+      const message = await api.registerUser({
         nama: form.nama.trim(),
         profesi: form.profesi.trim(),
         bidang: form.bidang,
@@ -128,11 +129,10 @@ function RegisterForm({ notify, onSwitch }: { notify: Notify; onSwitch: () => vo
         nrp: form.nrp.trim(),
         password: form.pw1,
       });
-      if (!r.success) throw new Error(r.message);
-      setOk(r.message ?? 'Registrasi berhasil.');
+      setOk(message || 'Registrasi berhasil.');
       setForm(EMPTY_REG);
     } catch (ex) {
-      setErr((ex as Error).message);
+      setErr(ex instanceof Error ? ex.message : String(ex));
     } finally {
       setBusy(false);
     }

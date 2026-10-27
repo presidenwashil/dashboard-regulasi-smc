@@ -1,8 +1,8 @@
-# Dashboard Regulasi — React client
+# Dashboard Regulasi - React client
 
-The Vite + React + TypeScript client for the Dashboard Regulasi RS Samarinda
-Medika Citra hospital app, currently being replatformed from the vanilla
-Apps Script app in the sibling repo `../bank-dokumen` (the parity baseline).
+The Vite + React + TypeScript client **and** the Apps Script backend
+(`gas/`) for the Dashboard Regulasi RS Samarinda Medika Citra hospital app,
+replatforming the vanilla Apps Script app it replaced (the parity baseline).
 
 Canonical docs live here: `GLOSSARY.md` (domain language), `docs/adr/`
 (platform decisions), `docs/testing.md` (test conventions), `AGENTS.md` (agent
@@ -17,7 +17,8 @@ guidance). The replatform spec and its tickets live as GitHub issues.
 | `npm run typecheck` | `tsc -b` |
 | `npm run lint` | oxlint |
 | `npm run test` / `npm run test:watch` | Vitest suite (component + contract + mock fidelity) |
-| `npm run ship` | validate → build → copy to `../bank-dokumen/Index.html` → `clasp push` → update the verification deployment (see `docs/ship.md`) |
+| `npm run ship:setup` | one-time setup for the verification deployment (`ship.config.json`) |
+| `npm run ship` | validate → build → copy to `gas/Index.html` → `clasp push` → update the verification deployment (see `docs/ship.md`) |
 | `npm run release` | _(final ticket)_ explicit-only production cutover |
 
 Production behavior (`google.script.run`) only exists inside the Apps Script
@@ -29,8 +30,18 @@ One seam between client and server: the **typed API adapter**
 (`src/adapter/`, ADR-0002). UI code only sees domain objects (`Dokumen`,
 `Sesi`, …) and public `'id'`-stable docId identities; legacy spreadsheet shapes
 never leave the adapter. Session expiry is centralized: the adapter raises the
-logout hook the app shell subscribes to.
+logout hook, and the app shell responds by clearing the active and persisted
+Sesi.
 
-The mock backend (`src/adapter/mock/`) faithfully mirrors `Code.js` contracts,
-including role gates and duplicate-sosialisasi collapse; its fidelity is pinned
-by tests.
+Sesi persistence lives in `src/sesi/sesi.ts`: the app restores a validated Sesi
+from browser `sessionStorage` on load, saves it after login, and clears it on
+logout or session expiry. Loading or clearing also removes the legacy
+`sessionData` entry.
+
+`src/adapter/install.ts` selects the backend: Vite development uses the
+behavior-faithful mock (`src/adapter/mock/`), while the production build uses
+`google.script.run` inside Apps Script. In development, the role switcher
+obtains seeded Admin/User sesi through the mock adapter's dev-only
+`createDevSesi`; the production adapter has no such capability, so the switcher
+does not render. Mock fidelity to the Apps Script backend in `gas/`,
+including role gates and duplicate-sosialisasi collapse, is pinned by tests.

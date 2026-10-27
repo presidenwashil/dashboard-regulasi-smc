@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
-import { api } from './api';
-import { LOGO_MUTU, LOGO_SMC } from './utils';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { LOGO_MUTU, LOGO_SMC, requireDocId } from './utils';
 import { Toast, type ToastState } from './components/Shared';
+import { createDefaultAppApi, isDevBackend } from './adapter/install';
+import { AdapterProvider } from './adapter/provider';
+import type { Adapter, ApiHooks } from './adapter';
+import { AdapterError, type Dokumen, type Sesi } from './adapter/types';
+import { clearSesi, loadSesi, saveSesi } from './sesi/sesi';
+import { RoleSwitcher } from './dev/role-switcher';
 import AuthPage from './pages/AuthPage';
 import DashboardPage from './pages/DashboardPage';
 import SosialisasiPage from './pages/SosialisasiPage';
 import FormPage from './pages/FormPage';
 import ApprovalPage from './pages/ApprovalPage';
-import type { Doc, Session } from './types';
 
 type TabId = 'dashboard' | 'sosialisasi' | 'form' | 'approval';
 
@@ -25,29 +29,56 @@ const TABS: TabDef[] = [
   { id: 'approval', label: 'Approval User', icon: 'ph-user-check', adminOnly: true },
 ];
 
-const loadSession = (): Session | null =>
-  JSON.parse(sessionStorage.getItem('sessionData') || 'null') as Session | null;
+type AppProps = {
+  createAdapter?: (hooks: ApiHooks) => Adapter;
+};
 
-export default function App() {
-  const [session, setSession] = useState<Session | null>(loadSession);
+export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
+  const [session, setSession] = useState<Sesi | null>(loadSesi);
   const [tab, setTab] = useState<TabId>('dashboard');
-  const [docs, setDocs] = useState<Doc[]>([]);
-  const [editing, setEditing] = useState<Doc | null>(null);
+  const [docs, setDocs] = useState<Dokumen[]>([]);
+  const [editing, setEditing] = useState<Dokumen | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const sessionExpiryHandled = useRef(false);
+  const sessionExpiryMessageShown = useRef(false);
 
   const notify = useCallback((msg: string, isError = false) => {
     setToast({ msg, isError });
     setTimeout(() => setToast(null), 4000);
   }, []);
 
+  const clearSession = useCallback(() => {
+    clearSesi();
+    setSession(null);
+    setDocs([]);
+    setEditing(null);
+    setTab('dashboard');
+  }, []);
+
+  const handleSessionExpired = useCallback(() => {
+    if (sessionExpiryHandled.current) return;
+    sessionExpiryHandled.current = true;
+    clearSession();
+  }, [clearSession]);
+
+  // The expiry hook is invoked asynchronously by the Adapter after a server response.
+  // oxlint-disable-next-line react/refs
+  const [appApi] = useState(() => createAdapter({ onSessionExpired: handleSessionExpired }));
+
   const reloadDocs = useCallback(async () => {
     if (!session) return;
     try {
-      setDocs(await api.getAllDocs(session.token));
-    } catch (e) {
-      notify((e as Error).message, true);
+      const documents = await appApi.getAllData(session);
+      documents.forEach(requireDocId);
+      setDocs(documents);
+    } catch (error) {
+      if (error instanceof AdapterError && error.sessionExpired) {
+        if (sessionExpiryMessageShown.current) return;
+        sessionExpiryMessageShown.current = true;
+      }
+      notify(error instanceof Error ? error.message : String(error), true);
     }
-  }, [session, notify]);
+  }, [appApi, session, notify]);
 
   useEffect(() => {
     // Sinkronisasi dengan server Apps Script. setState terjadi setelah await.
@@ -55,41 +86,50 @@ export default function App() {
     if (session) void reloadDocs();
   }, [session, reloadDocs]);
 
-  const handleLogin = (s: Session) => {
-    sessionStorage.setItem('sessionData', JSON.stringify(s));
-    setSession(s);
-  };
-
-  const handleLogout = () => {
-    if (session?.token) api.logout(session.token).catch(() => undefined);
-    sessionStorage.removeItem('sessionData');
-    setSession(null);
+  const handleLogin = (sesi: Sesi) => {
+    sessionExpiryHandled.current = false;
+    sessionExpiryMessageShown.current = false;
+    saveSesi(sesi);
+    setSession(sesi);
+    setDocs([]);
     setEditing(null);
     setTab('dashboard');
   };
 
+  const handleLogout = () => {
+    if (session) {
+      void appApi.logoutSesi(session).catch((error: unknown) =>
+        notify(error instanceof Error ? error.message : String(error), true),
+      );
+    }
+    clearSession();
+  };
+
   if (!session) {
     return (
-      <>
+      <AdapterProvider api={appApi}>
         <AuthPage onLogin={handleLogin} notify={notify} />
         <Toast toast={toast} />
-      </>
+        {isDevBackend && <RoleSwitcher api={appApi} onSesi={handleLogin} notify={notify} />}
+      </AdapterProvider>
     );
   }
 
-  const isAdmin = session.role === 'Admin';
+  const isAdmin = session.user.role === 'Admin';
   const visibleTabs = TABS.filter((t) => !t.adminOnly || isAdmin);
 
   const goTab = (t: TabId) => {
     if (t !== 'form') setEditing(null);
     setTab(t);
   };
-  const goEdit = (doc: Doc) => {
+  const goEdit = (doc: Dokumen) => {
+    requireDocId(doc);
     setEditing(doc);
     setTab('form');
   };
 
   return (
+    <AdapterProvider api={appApi}>
     <div className="max-w-350 mx-auto p-4 sm:p-6 lg:p-8">
       <header className="bg-linear-to-r from-gray-800 to-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6 mb-4 flex flex-col md:flex-row items-center justify-between relative overflow-hidden">
         <div className="absolute -top-20 -right-20 w-64 h-64 bg-cyan-500 rounded-full mix-blend-screen blur-[80px] opacity-20" />
@@ -112,8 +152,8 @@ export default function App() {
       <div className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 mb-4 flex items-center justify-between text-sm">
         <div className="flex items-center gap-2 text-gray-300">
           <i className="ph ph-user-circle text-cyan-400 text-xl" />
-          <span className="font-semibold">{session.nama}</span>
-          <span className="text-xs bg-gray-700 px-2 py-0.5 rounded-full text-cyan-400">{session.role}</span>
+          <span className="font-semibold">{session.user.nama}</span>
+          <span className="text-xs bg-gray-700 px-2 py-0.5 rounded-full text-cyan-400">{session.user.role}</span>
         </div>
         <button onClick={handleLogout} className="text-red-400 hover:text-red-300 flex items-center gap-1 font-semibold">
           <i className="ph ph-sign-out text-lg" /> Keluar
@@ -141,16 +181,16 @@ export default function App() {
       </nav>
 
       {tab === 'dashboard' && (
-        <DashboardPage docs={docs} token={session.token} notify={notify} onGoSosialisasi={() => goTab('sosialisasi')} />
+        <DashboardPage docs={docs} sesi={session} notify={notify} onGoSosialisasi={() => goTab('sosialisasi')} />
       )}
       {tab === 'sosialisasi' && (
         <SosialisasiPage docs={docs} session={session} notify={notify} onEdit={goEdit} />
       )}
       {tab === 'form' && (
         <FormPage
-          key={editing?.rowIndex ?? 'new'}
+          key={editing?.docId ?? 'new'}
           editing={editing}
-          token={session.token}
+          sesi={session}
           notify={notify}
           onSaved={() => {
             void reloadDocs();
@@ -158,9 +198,11 @@ export default function App() {
           }}
         />
       )}
-      {tab === 'approval' && isAdmin && <ApprovalPage token={session.token} notify={notify} />}
+      {tab === 'approval' && isAdmin && <ApprovalPage sesi={session} notify={notify} />}
 
       <Toast toast={toast} />
     </div>
+    {isDevBackend && <RoleSwitcher api={appApi} onSesi={handleLogin} notify={notify} />}
+    </AdapterProvider>
   );
 }

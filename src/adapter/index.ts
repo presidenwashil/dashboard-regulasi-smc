@@ -7,8 +7,8 @@
  * Failure semantics (pinned by contract tests):
  *  - a successful envelope resolves with the normalized domain result;
  *  - a failed envelope rejects with AdapterError carrying the server message;
- *  - an envelope flagged sessionExpired first raises the app-level logout
- *    hook, then rejects (centralized session handling);
+ *  - an expired Sesi envelope or GAS failure raises the app-level logout hook,
+ *    then rejects with the server message;
  *  - a backend transport failure rejects with the vanilla connection error.
  */
 
@@ -35,47 +35,52 @@ export type ApiHooks = {
 };
 
 const CONNECTION_ERROR = "Koneksi error, coba lagi.";
+const INVALID_SESSION_MESSAGE = "Sesi tidak valid, silakan login ulang.";
 
 export type Adapter = {
   /** Log in with NRP + password; resolves the Sesi to keep in session storage. */
   loginUser(nrp: string, password: string): Promise<Sesi>;
-  /** End the Sesi server-side; UI hands over the whole Sesi, never the token. */
+  /** End the Sesi server-side. */
   logoutSesi(sesi: Sesi): Promise<void>;
   /** Self-service Registrasi; resolves the server's success message. */
   registerUser(input: RegistrasiInput): Promise<string>;
   /** Public master list of Bidang (used by Registrasi and the Dokumen form). */
   getMasterBidang(): Promise<string[]>;
-  /** All regulation documents, newest sheet row first, normalized. */
-  getAllData(): Promise<Dokumen[]>;
+  /**
+   * All regulation documents, newest sheet row first, normalized. The Sesi
+   * credential is the explicit first argument: the real getAllData requires
+   * it and throws on an invalid Sesi.
+   */
+  getAllData(sesi: Sesi): Promise<Dokumen[]>;
   /** Create a Dokumen with Drive-file upload payloads. */
-  saveDataWithFiles(token: string, input: DokumenInput): Promise<string>;
+  saveDataWithFiles(sesi: Sesi, input: DokumenInput): Promise<string>;
   /** Edit a Dokumen; omitted files keep the existing Drive links. */
   updateDataWithFiles(
-    token: string,
+    sesi: Sesi,
     input: DokumenInput,
     docId: number,
     existingLinks: { existingPdfUrl: string | null; existingWordUrl: string | null },
   ): Promise<string>;
   /** Confirm a Dokumen has been read; duplicates collapse to the first record. */
-  markDocumentRead(token: string, docId: number, judul: string): Promise<string>;
+  markDocumentRead(sesi: Sesi, docId: number, judul: string): Promise<string>;
   /** docIds the current User has already marked read. */
-  getMyReadDocs(token: string): Promise<number[]>;
+  getMyReadDocs(sesi: Sesi): Promise<number[]>;
   /** Progress Sosialisasi for all documents (Admin). */
-  getSosialisasiSummary(token: string): Promise<SosialisasiSummaryData>;
+  getSosialisasiSummary(sesi: Sesi): Promise<SosialisasiSummaryData>;
   /** Sudah/belum breakdown for one Dokumen (Admin). */
-  getSosialisasiDetail(token: string, docId: number): Promise<SosialisasiDetailData>;
+  getSosialisasiDetail(sesi: Sesi, docId: number): Promise<SosialisasiDetailData>;
   /** Printable Rekap PDF for one Dokumen (Admin). */
-  generateSosialisasiPdf(token: string, docId: number): Promise<RekapPdf>;
+  generateSosialisasiPdf(sesi: Sesi, docId: number): Promise<RekapPdf>;
   /** Counts of approved users, by Bidang and Unit (dashboard). */
-  getUserStats(token: string): Promise<UserStatsData>;
+  getUserStats(sesi: Sesi): Promise<UserStatsData>;
   /** Pending Registrasi rows (Admin). */
-  getPendingUsers(token: string): Promise<PendingUser[]>;
+  getPendingUsers(sesi: Sesi): Promise<PendingUser[]>;
   /** Approve/reject/deactivate an account (Admin). */
-  setUserStatus(token: string, rowIndex: number, newStatus: string): Promise<string>;
+  setUserStatus(sesi: Sesi, rowIndex: number, newStatus: string): Promise<string>;
   /** All accounts with status and role (Admin). */
-  getAllUsers(token: string): Promise<AdminUser[]>;
+  getAllUsers(sesi: Sesi): Promise<AdminUser[]>;
   /** Reset a User's password (Admin); never reveals the stored hash. */
-  resetUserPassword(token: string, rowIndex: number, newPassword: string): Promise<string>;
+  resetUserPassword(sesi: Sesi, rowIndex: number, newPassword: string): Promise<string>;
   /**
    * DEV ONLY: dev role-switcher sesi against the mock backend. Absent on the
    * GAS adapter (production), where the switcher renders nothing.
@@ -93,22 +98,37 @@ function asBackendRecord<T>(backend: T): Record<string, (...args: unknown[]) => 
 export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & object {
   const target = asBackendRecord(backend);
 
+  function throwBackendError(error: unknown): never {
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === "object" && error !== null && "message" in error &&
+            typeof error.message === "string"
+          ? error.message
+          : "";
+    if (message.includes(INVALID_SESSION_MESSAGE)) throwSessionExpired();
+    throw new AdapterError(CONNECTION_ERROR, false);
+  }
+
+  function throwSessionExpired(message = INVALID_SESSION_MESSAGE): never {
+    hooks.onSessionExpired?.();
+    throw new AdapterError(message, true);
+  }
+
   /**
    * Run one server function: normalize envelopes into domain results.
-   * The token is always an explicit first argument supplied by the caller,
+   * The Sesi credential is always an explicit first argument supplied by the caller,
    * exactly as the server expects.
    */
   async function call<T>(fnName: string, ...args: unknown[]): Promise<T> {
     let envelope: ServerEnvelope;
     try {
       envelope = (await target[fnName](...args)) as ServerEnvelope;
-    } catch {
-      // Transport failure (e.g., the sandbox call itself failed): the vanilla
-      // app surfaces this exact message.
-      throw new AdapterError(CONNECTION_ERROR, false);
+    } catch (error) {
+      throwBackendError(error);
     }
-    if (envelope && envelope.sessionExpired) {
-      hooks.onSessionExpired?.();
+    if (envelope?.sessionExpired || envelope?.message?.includes(INVALID_SESSION_MESSAGE)) {
+      throwSessionExpired(envelope.message ?? INVALID_SESSION_MESSAGE);
     }
     if (!envelope || !envelope.success) {
       throw new AdapterError(
@@ -139,24 +159,48 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
         .map((value) => (value === null || value === undefined ? "" : String(value).trim()))
         .filter(Boolean);
     },
-    async getAllData() {
-      const envelope = await call<ServerEnvelope>("getAllData");
+    async getAllData(sesi: Sesi) {
+      // The real getAllData (gas/Documents.gs) is the one server call without
+      // an envelope: it requires the Sesi credential, throws the invalid-Sesi
+      // message when it expires, and answers a bare rows array. The enveloped
+      // shape stays tolerated (e.g. mock/test backends), with identical
+      // envelope semantics. Raw positional rows convert to domain Dokumen either way.
+      let response: ServerEnvelope | unknown[] | undefined;
+      try {
+        response = (await target.getAllData(sesi.token)) as ServerEnvelope | unknown[];
+      } catch (error) {
+        throwBackendError(error);
+      }
+      if (Array.isArray(response)) {
+        // The real server's bare rows array — pass it straight to the encoder.
+        return rawRowsToDokumen(response as never);
+      }
+      const envelope = response as ServerEnvelope;
+      if (envelope?.sessionExpired || envelope?.message?.includes(INVALID_SESSION_MESSAGE)) {
+        throwSessionExpired(envelope.message ?? INVALID_SESSION_MESSAGE);
+      }
+      if (!envelope || !envelope.success) {
+        throw new AdapterError(
+          envelope?.message ?? "Terjadi kesalahan pada server.",
+          Boolean(envelope?.sessionExpired),
+        );
+      }
       return rawRowsToDokumen(envelope.data as never);
     },
-    async saveDataWithFiles(token, input) {
+    async saveDataWithFiles(sesi, input) {
       const response = await call<ServerEnvelope>(
         "saveDataWithFiles",
-        token,
+        sesi.token,
         { ...toLegacyDocPayload(input), pdfFile: input.pdfFile, wordFile: input.wordFile },
       );
-      return response.message ?? "Data dan File berhasil disimpan!";
+      return response.message ?? "";
     },
-    async updateDataWithFiles(token, input, docId, existingLinks) {
+    async updateDataWithFiles(sesi, input, docId, existingLinks) {
       // Edit mode omits files entirely — the server then keeps the existing
       // Drive links (frozen upload contract), echoing them through the payload.
       const response = await call<ServerEnvelope>(
         "updateDataWithFiles",
-        token,
+        sesi.token,
         {
           ...toLegacyDocPayload(input),
           existingPdfUrl: existingLinks.existingPdfUrl ?? "",
@@ -164,18 +208,18 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
         },
         docId,
       );
-      return response.message ?? "Data berhasil diperbarui!";
+      return response.message ?? "";
     },
-    async markDocumentRead(token, docId, judul) {
-      const response = await call<ServerEnvelope>("markDocumentRead", token, docId, judul);
-      return response.message ?? "Dokumen ditandai sudah dibaca.";
+    async markDocumentRead(sesi, docId, judul) {
+      const response = await call<ServerEnvelope>("markDocumentRead", sesi.token, docId, judul);
+      return response.message ?? "";
     },
-    async getMyReadDocs(token) {
-      const envelope = await call<ServerEnvelope>("getMyReadDocs", token);
+    async getMyReadDocs(sesi) {
+      const envelope = await call<ServerEnvelope>("getMyReadDocs", sesi.token);
       return ((envelope.data as Array<unknown>) ?? []).map((value) => Number(value));
     },
-    async getSosialisasiSummary(token) {
-      const envelope = await call<ServerEnvelope>("getSosialisasiSummary", token);
+    async getSosialisasiSummary(sesi) {
+      const envelope = await call<ServerEnvelope>("getSosialisasiSummary", sesi.token);
       return {
         totalUser: Number(envelope.totalUser ?? 0),
         approvedUsers: (envelope.approvedUsers ?? []).map((u) => ({
@@ -185,8 +229,8 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
         readMap: normalizeReadMap(envelope.readMap),
       };
     },
-    async getSosialisasiDetail(token, docId) {
-      const envelope = await call<ServerEnvelope>("getSosialisasiDetail", token, docId);
+    async getSosialisasiDetail(sesi, docId) {
+      const envelope = await call<ServerEnvelope>("getSosialisasiDetail", sesi.token, docId);
       const data = (envelope.data ?? {}) as SosialisasiDetailData;
       return {
         judul: String(data.judul ?? ""),
@@ -196,20 +240,20 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
         belum: (data.belum ?? []).map((u) => ({ ...u })),
       };
     },
-    async generateSosialisasiPdf(token, docId) {
-      const envelope = await call<ServerEnvelope>("generateSosialisasiPdf", token, docId);
+    async generateSosialisasiPdf(sesi, docId) {
+      const envelope = await call<ServerEnvelope>("generateSosialisasiPdf", sesi.token, docId);
       return { base64: String(envelope.base64 ?? ""), filename: String(envelope.filename ?? "rekap.pdf") };
     },
-    async getUserStats(token) {
-      const envelope = await call<ServerEnvelope>("getUserStats", token);
+    async getUserStats(sesi) {
+      const envelope = await call<ServerEnvelope>("getUserStats", sesi.token);
       return {
         totalUser: Number(envelope.totalUser ?? 0),
         byBidang: { ...(envelope.byBidang ?? {}) },
         byUnit: { ...(envelope.byUnit ?? {}) },
       };
     },
-    async getPendingUsers(token) {
-      const envelope = await call<ServerEnvelope>("getPendingUsers", token);
+    async getPendingUsers(sesi) {
+      const envelope = await call<ServerEnvelope>("getPendingUsers", sesi.token);
       const rows = ((envelope.data as Array<Record<string, unknown>>) ?? []).map((row) => ({
         rowIndex: Number(row.rowIndex),
         nama: String(row.nama ?? ""),
@@ -220,12 +264,12 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
       }));
       return rows as PendingUser[];
     },
-    async setUserStatus(token, rowIndex, newStatus) {
-      const response = await call<ServerEnvelope>("setUserStatus", token, rowIndex, newStatus);
+    async setUserStatus(sesi, rowIndex, newStatus) {
+      const response = await call<ServerEnvelope>("setUserStatus", sesi.token, rowIndex, newStatus);
       return response.message ?? "";
     },
-    async getAllUsers(token) {
-      const envelope = await call<ServerEnvelope>("getAllUsers", token);
+    async getAllUsers(sesi) {
+      const envelope = await call<ServerEnvelope>("getAllUsers", sesi.token);
       const rows = ((envelope.data as Array<Record<string, unknown>>) ?? []).map((row) => ({
         rowIndex: Number(row.rowIndex),
         nama: String(row.nama ?? ""),
@@ -238,8 +282,8 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
       }));
       return rows as AdminUser[];
     },
-    async resetUserPassword(token, rowIndex, newPassword) {
-      const response = await call<ServerEnvelope>("resetUserPassword", token, rowIndex, newPassword);
+    async resetUserPassword(sesi, rowIndex, newPassword) {
+      const response = await call<ServerEnvelope>("resetUserPassword", sesi.token, rowIndex, newPassword);
       return response.message ?? "";
     },
     ...(typeof target.createDevSesi === "function"
@@ -273,13 +317,13 @@ function toLegacyDocPayload(input: DokumenInput) {
     nomor: input.nomor,
     jenis: input.jenis,
     pemilik: input.pemilik,
-    unit: input.unit,
+    unit: input.unit || "-",
     bidang: joined(input.bidang),
     status: input.statusDokumen,
     revisi: input.revisi ?? "-",
     tanggal: input.tanggal ?? "",
     akreditasi: joined(input.akreditasi),
-    keterangan: input.keterangan,
+    keterangan: input.keterangan || "-",
     statusBerlaku: input.statusBerlaku || "Aktif",
   };
 }

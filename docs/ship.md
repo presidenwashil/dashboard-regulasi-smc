@@ -3,7 +3,8 @@
 Established by the ship-pipeline slice (ticket #3). The bridge from this repo's
 build output to the real Apps Script project — the path every later feature
 slice uses for real-GAS verification. Decisions behind it: `docs/adr/0001`
-(two repos, clasp bridge) and `docs/adr/0003` (version-pin isolation).
+(backend vendored in this repo's `gas/`, clasp bridge) and `docs/adr/0003`
+(version-pin isolation).
 
 ## What `npm run ship` does
 
@@ -12,9 +13,11 @@ Runs, in order, halting at the **first failing step** with a clear report:
 1. **typecheck** (`npm run typecheck`, `tsc -b`)
 2. **lint** (`npm run lint`, oxlint)
 3. **tests** (`npm run test`, the full Vitest suite)
-4. **build** (`npm run build`, single-file `dist/index.html`)
-5. **copy artifact** — overwrites `../bank-dokumen/Index.html`
-6. **clasp push** — from `../bank-dokumen` (its `.clasp.json` points at the project)
+4. **build** (`npm run build`, single-file `dist/index.html`, already copied
+   to `gas/Index.html` by the build)
+5. **copy artifact** — overwrites `gas/Index.html` (belt-and-braces; the
+   build itself already copied it)
+6. **clasp push** — from the repo root (the root `.clasp.json` points at `gas/`)
 7. **redeploy verification** — `clasp redeploy <id> -d …`, where `<id>` comes
    from `ship.config.json`
 
@@ -41,8 +44,8 @@ Provisioned once from any machine that will ship; `scripts/ship-setup.mjs`:
 
 Human-only prerequisites, if missing, the script says exactly what to do:
 
-- **clasp login** — browser OAuth flow, run manually: `clasp login` (in
-  `../bank-dokumen`), then re-run setup.
+- **clasp login** — browser OAuth flow, run manually: `clasp login` (from the
+  repo root), then re-run setup.
 - **Apps Script API enabled** — `clasp` reports it; toggle at
   `https://script.google.com/home/usersettings`, wait ~30 s for propagation,
   re-run setup. (Google account-wide setting; once is enough.)
@@ -63,9 +66,8 @@ authorization, session behavior, server integration) before release. The
 first slice's checklist: app shell loads inside the GAS sandbox with no CDN
 gaps.
 
-## Generated output in the sibling repo
+## Generated output in this repo
 
-After ship, `../bank-dokumen/Index.html` is generated (the React build). It
-remains tracked in the sibling repo so the vanilla file stays recoverable and
-deployable before cutover; hand edits there will be overwritten by the next
-ship.
+After ship, `gas/Index.html` is generated (the React build). It is gitignored
+here — hand edits to it will be overwritten by the next ship; the backend
+logic lives in the `gas/*.gs` sources, which are edited and committed directly.

@@ -1,43 +1,36 @@
 import { describe, it, expect } from 'vitest';
-import { countBy, isAktif, toDoc, yearOf, fmtTanggalInput } from '../../src/utils';
+import type { Dokumen } from '../../src/adapter/types';
+import { countBy, isAktif, yearOf, fmtTanggalInput } from '../../src/utils';
 
-const row = (over: Partial<Record<number, unknown>> = {}) => {
-  const r: unknown[] = ['ts', 'SPO Cuci Tangan', '001/A', 'SPO', 'Yanmed', 'IGD', 'Casemix, IT', 'Baru', '0',
-    Date.UTC(2026, 2, 10), 'pdf-url', 'word-url', 'TKRS', 'catatan', 'Aktif', 7];
-  Object.entries(over).forEach(([i, v]) => (r[Number(i)] = v));
-  return r;
-};
-
-describe('toDoc', () => {
-  it('memetakan indeks kolom ke field yang benar', () => {
-    const d = toDoc(row());
-    expect(d.rowIndex).toBe(7);
-    expect(d.judul).toBe('SPO Cuci Tangan');
-    expect(d.pemilik).toBe('Yanmed');
-    expect(d.unit).toBe('IGD');
-    expect(d.pdfUrl).toBe('pdf-url');
-    expect(d.statusBerlaku).toBe('Aktif');
-  });
-
-  it('memberi default Aktif jika kolom status berlaku kosong', () => {
-    expect(toDoc(row({ 14: '' })).statusBerlaku).toBe('Aktif');
-  });
-
-  it('mengubah null menjadi string kosong pada kolom teks', () => {
-    expect(toDoc(row({ 10: null })).pdfUrl).toBe('');
-  });
+const document = (overrides: Partial<Dokumen> = {}): Dokumen => ({
+  docId: 7,
+  judul: 'SPO Cuci Tangan',
+  nomor: '001/A',
+  jenis: 'SPO',
+  pemilik: 'Yanmed',
+  unit: 'IGD',
+  bidang: ['Casemix', 'IT'],
+  statusDokumen: 'Baru',
+  revisi: null,
+  tanggal: Date.UTC(2026, 2, 10),
+  pdfUrl: 'pdf-url',
+  wordUrl: 'word-url',
+  akreditasi: ['TKRS'],
+  keterangan: 'catatan',
+  statusBerlaku: 'Aktif',
+  ...overrides,
 });
 
 describe('isAktif', () => {
   it('true hanya untuk Aktif', () => {
-    expect(isAktif(toDoc(row({ 14: 'Aktif' })))).toBe(true);
-    expect(isAktif(toDoc(row({ 14: 'Dicabut' })))).toBe(false);
+    expect(isAktif(document())).toBe(true);
+    expect(isAktif(document({ statusBerlaku: 'Dicabut' }))).toBe(false);
   });
 });
 
 describe('yearOf', () => {
   it('mengambil tahun dari timestamp', () => {
-    expect(yearOf(toDoc(row()))).toBe(2026);
+    expect(yearOf(document())).toBe(2026);
   });
 });
 

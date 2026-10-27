@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { api } from '../api';
-import { Modal, Pagination } from '../components/Shared';
-import type { Notify, PendingUser, UserRow } from '../types';
+import { useAdapter } from '../adapter/context';
+import { Modal, Pagination, type Notify } from '../components/Shared';
+import type { AdminUser, PendingUser, Sesi } from '../adapter/types';
 
 const PER_PAGE = 10;
 
-const statusCls = (s: UserRow['status']): string =>
+const statusCls = (s: string): string =>
   s === 'Approved'
     ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
     : s === 'Pending'
@@ -13,25 +13,26 @@ const statusCls = (s: UserRow['status']): string =>
     : 'bg-red-500/20 text-red-400 border-red-500/50';
 
 interface Props {
-  token: string;
+  sesi: Sesi;
   notify: Notify;
 }
 
-export default function ApprovalPage({ token, notify }: Props) {
+export default function ApprovalPage({ sesi, notify }: Props) {
+  const api = useAdapter();
   const [pending, setPending] = useState<PendingUser[]>([]);
-  const [users, setUsers] = useState<UserRow[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [pPage, setPPage] = useState(0);
   const [uPage, setUPage] = useState(0);
-  const [target, setTarget] = useState<UserRow | null>(null);
+  const [target, setTarget] = useState<AdminUser | null>(null);
   const [pw, setPw] = useState({ a: '', b: '' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const [p, u] = await Promise.all([api.getPending(token), api.getAllUsers(token)]);
-    if (p.success && p.data) setPending(p.data);
-    if (u.success && u.data) setUsers(u.data);
-  }, [token]);
+    const [p, u] = await Promise.all([api.getPendingUsers(sesi), api.getAllUsers(sesi)]);
+    setPending(p);
+    setUsers(u);
+  }, [api, sesi]);
 
   useEffect(() => {
     // Sinkronisasi dengan server Apps Script. setState terjadi setelah await.
@@ -41,9 +42,8 @@ export default function ApprovalPage({ token, notify }: Props) {
 
   const review = async (rowIndex: number, status: 'Approved' | 'Rejected') => {
     try {
-      const r = await api.setUserStatus(token, rowIndex, status);
-      if (!r.success) throw new Error(r.message);
-      notify(r.message ?? 'Status diperbarui.');
+      const message = await api.setUserStatus(sesi, rowIndex, status);
+      notify(message || 'Status diperbarui.');
       void load();
     } catch (e) {
       notify((e as Error).message, true);
@@ -57,9 +57,8 @@ export default function ApprovalPage({ token, notify }: Props) {
     if (pw.a !== pw.b) return setErr('Password dan ulangi password tidak sama.');
     setBusy(true);
     try {
-      const r = await api.resetPassword(token, target.rowIndex, pw.a);
-      if (!r.success) throw new Error(r.message);
-      notify(r.message ?? 'Password direset.');
+      const message = await api.resetUserPassword(sesi, target.rowIndex, pw.a);
+      notify(message || 'Password direset.');
       setTarget(null);
     } catch (ex) {
       setErr((ex as Error).message);
