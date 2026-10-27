@@ -43,5 +43,5 @@ behavior-faithful mock (`src/adapter/mock/`), while the production build uses
 `google.script.run` inside Apps Script. In development, the role switcher
 obtains seeded Admin/User sesi through the mock adapter's dev-only
 `createDevSesi`; the production adapter has no such capability, so the switcher
-does not render. Mock fidelity to `Code.js`, including role gates and
-duplicate-sosialisasi collapse, is pinned by tests.
+does not render. Mock fidelity to the Apps Script backend in `gas/`,
+including role gates and duplicate-sosialisasi collapse, is pinned by tests.

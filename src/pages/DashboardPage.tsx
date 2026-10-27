@@ -3,7 +3,7 @@ import { Pie, Doughnut, Bar } from 'react-chartjs-2';
 import type { ChartOptions } from 'chart.js';
 import { useAdapter } from '../adapter/context';
 import { countBy } from '../utils';
-import type { Dokumen, UserStatsData } from '../adapter/types';
+import type { Dokumen, Sesi, UserStatsData } from '../adapter/types';
 import type { Notify } from '../components/Shared';
 
 const legendOpt = {
@@ -42,20 +42,20 @@ function Card({ title, className = '', children }: { title: string; className?: 
 
 interface DashboardPageProps {
   docs: Dokumen[];
-  token: string;
+  sesi: Sesi;
   notify: Notify;
   onGoSosialisasi: () => void;
 }
 
-export default function DashboardPage({ docs, token, notify, onGoSosialisasi }: DashboardPageProps) {
+export default function DashboardPage({ docs, sesi, notify, onGoSosialisasi }: DashboardPageProps) {
   const api = useAdapter();
   const [stats, setStats] = useState<UserStatsData | null>(null);
 
   useEffect(() => {
-    api.getUserStats(token)
+    api.getUserStats(sesi)
       .then(setStats)
       .catch((e: Error) => notify(e.message, true));
-  }, [api, token, notify]);
+  }, [api, sesi, notify]);
 
   const agg = useMemo(() => ({
     status: sortDesc(countBy(docs, (d) => d.statusDokumen)),

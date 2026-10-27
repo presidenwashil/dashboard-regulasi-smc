@@ -14,7 +14,7 @@ describe("ApprovalPage with the mock Adapter", () => {
 
     render(
       <AdapterProvider api={api}>
-        <ApprovalPage token={sesi.token} notify={vi.fn()} />
+        <ApprovalPage sesi={sesi} notify={vi.fn()} />
       </AdapterProvider>,
     );
 

@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApi } from "./index";
 import { createGoogleBackend, type GoogleScriptRunner } from "./google";
-import { AdapterError } from "./types";
+import { AdapterError, type Sesi } from "./types";
 import type { Backend } from "./backend";
 import type { RawDokumenRow } from "./rawShapes";
+
+const testSesi = (token: string): Sesi => ({
+  token,
+  user: { nama: "Dr. Farah", profesi: "Dokter", bidang: "Yanmed", unit: "IGD", nrp: "0042", role: "User" },
+});
 
 describe("adapter envelope contract (createApi over a Backend)", () => {
   it("resolves normalized Dokumen from a successful getAllData envelope with raw rows", async () => {
@@ -15,7 +20,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     const backend = { getAllData: () => ({ success: true, data: rawRows }) } as
       unknown as Backend;
     const api = createApi(backend);
-    await expect(api.getAllData("tok-doc")).resolves.toMatchObject([{ docId: 7, judul: "Pedoman Contoh" }]);
+    await expect(api.getAllData(testSesi("tok-doc"))).resolves.toMatchObject([{ docId: 7, judul: "Pedoman Contoh" }]);
   });
 
   it("tolerates the real getAllData contract: a bare rows array without an envelope", async () => {
@@ -27,7 +32,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     ];
     const backend = { getAllData: () => rawRows } as unknown as Backend;
     const api = createApi(backend);
-    await expect(api.getAllData("tok-doc")).resolves.toMatchObject([{ docId: 7, judul: "Pedoman Contoh" }]);
+    await expect(api.getAllData(testSesi("tok-doc"))).resolves.toMatchObject([{ docId: 7, judul: "Pedoman Contoh" }]);
   });
 
   it("rejects with AdapterError carrying the server message when the envelope failed", async () => {
@@ -45,7 +50,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     } as unknown as Backend;
     const onSessionExpired = vi.fn();
     const api = createApi(backend, { onSessionExpired });
-    await expect(api.getAllData("tok-expired")).rejects.toMatchObject({
+    await expect(api.getAllData(testSesi("tok-expired"))).rejects.toMatchObject({
       message: "Sesi tidak valid.",
       sessionExpired: true,
     });
@@ -77,26 +82,47 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     } as unknown as Backend;
     const onSessionExpired = vi.fn();
     const api = createApi(backend, { onSessionExpired });
-    await expect(api.getAllData("tok-1")).rejects.toThrow();
+    await expect(api.getAllData(testSesi("tok-1"))).rejects.toThrow();
     expect(onSessionExpired).not.toHaveBeenCalled();
+  });
+
+  it("expires the Sesi when an unflagged server envelope carries the GAS expiry message", async () => {
+    const backend = {
+      getPendingUsers: () => ({
+        success: false,
+        message: "Sesi tidak valid, silakan login ulang.",
+      }),
+    } as unknown as Backend;
+    const onSessionExpired = vi.fn();
+    const api = createApi(backend, { onSessionExpired });
+    await expect(api.getPendingUsers(testSesi("tok-expired"))).rejects.toMatchObject({
+      message: "Sesi tidak valid, silakan login ulang.",
+      sessionExpired: true,
+    });
+    expect(onSessionExpired).toHaveBeenCalledOnce();
   });
 
   it("maps a rejected backend promise (transport failure) to the connection error", async () => {
     const backend = { getAllData: () => Promise.reject(new TypeError("network down")) } as
       unknown as Backend;
     const api = createApi(backend);
-    await expect(api.getAllData("tok-1")).rejects.toThrow("Koneksi error, coba lagi.");
+    await expect(api.getAllData(testSesi("tok-1"))).rejects.toThrow("Koneksi error, coba lagi.");
   });
 
-  it("maps the real getAllData throw on an invalid Sesi to the connection error", async () => {
+  it("expires the Sesi when the real getAllData throws its invalid-Sesi message", async () => {
     // gas/Documents.gs: an invalid Sesi throws instead of answering an envelope.
     const backend = {
       getAllData: () => {
         throw new Error("Sesi tidak valid, silakan login ulang.");
       },
     } as unknown as Backend;
-    const api = createApi(backend);
-    await expect(api.getAllData("token-palsu")).rejects.toThrow("Koneksi error, coba lagi.");
+    const onSessionExpired = vi.fn();
+    const api = createApi(backend, { onSessionExpired });
+    await expect(api.getAllData(testSesi("token-palsu"))).rejects.toMatchObject({
+      message: "Sesi tidak valid, silakan login ulang.",
+      sessionExpired: true,
+    });
+    expect(onSessionExpired).toHaveBeenCalledOnce();
   });
 
   it("returns the Sesi created by a successful loginUser envelope", async () => {
@@ -117,9 +143,10 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
       },
     });
     const api = createApi(backend);
-    await api.getAllData("tok-9");
-    await api.getAllUsers("tok-9");
-    await api.markDocumentRead("tok-9", 7, "Pedoman Contoh");
+    const sesi = testSesi("tok-9");
+    await api.getAllData(sesi);
+    await api.getAllUsers(sesi);
+    await api.markDocumentRead(sesi, 7, "Pedoman Contoh");
     expect(calls).toContainEqual(["getAllData", "tok-9"]);
     expect(calls).toContainEqual(["getAllUsers", "tok-9"]);
     expect(calls).toContainEqual(["markDocumentRead", "tok-9", 7, "Pedoman Contoh"]);
@@ -129,7 +156,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     const backend = {
       markDocumentRead: () => ({ success: true }),
     } as unknown as Backend;
-    await expect(createApi(backend).markDocumentRead("tok", 7, "SPO Ujian")).resolves.toBe("");
+    await expect(createApi(backend).markDocumentRead(testSesi("tok"), 7, "SPO Ujian")).resolves.toBe("");
   });
 
   it("logs out the whole Sesi while the token stays inside the seam", async () => {
@@ -178,7 +205,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
       },
     });
     const api = createApi(backend);
-    await api.saveDataWithFiles("tok", {
+    await api.saveDataWithFiles(testSesi("tok"), {
       judul: "SPO Ujian", nomor: "SPO/RM/003", jenis: "SPO", pemilik: "Casemix", unit: "Data Entry",
       bidang: ["Umum", "SDM"], statusDokumen: "Revisi", revisi: "2", tanggal: "2026-05-01",
       akreditasi: ["TKRS"], keterangan: "-", statusBerlaku: "Aktif",
@@ -207,7 +234,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
       },
     });
     const api = createApi(backend);
-    await api.updateDataWithFiles("tok", {
+    await api.updateDataWithFiles(testSesi("tok"), {
       judul: "SPO Ujian", nomor: "SPO/RM/003", jenis: "SPO", pemilik: "Casemix", unit: "Data Entry",
       bidang: [], statusDokumen: "Baru", revisi: null, tanggal: "2026-05-01",
       akreditasi: [], keterangan: "", statusBerlaku: "Aktif",
@@ -270,7 +297,7 @@ describe("google.script.run backend (adapter contract)", () => {
   it("invokes the server function with the token as the first argument", async () => {
     const { runnerFactory, invokes } = createFakeRunner();
     const api = createApi(createGoogleBackend(runnerFactory));
-    const promise = api.getAllUsers("tok-9");
+    const promise = api.getAllUsers(testSesi("tok-9"));
     expect(invokes).toHaveLength(1);
     expect(invokes[0]!.fnName).toBe("getAllUsers");
     expect(invokes[0]!.args).toEqual(["tok-9"]);
@@ -283,7 +310,7 @@ describe("google.script.run backend (adapter contract)", () => {
     const api = createApi(createGoogleBackend(runnerFactory));
     // The Sesi credential is the explicit first argument, exactly as the
     // real getAllData (gas/Documents.gs) requires.
-    const promise = api.getAllData("tok-9");
+    const promise = api.getAllData(testSesi("tok-9"));
     expect(invokes[0]!.fnName).toBe("getAllData");
     expect(invokes[0]!.args).toEqual(["tok-9"]);
     invokes[0]!.success({
@@ -297,7 +324,7 @@ describe("google.script.run backend (adapter contract)", () => {
   it("resolves normalized domain data when the real server answers a bare rows array", async () => {
     const { runnerFactory, invokes } = createFakeRunner();
     const api = createApi(createGoogleBackend(runnerFactory));
-    const promise = api.getAllData("tok-9");
+    const promise = api.getAllData(testSesi("tok-9"));
     invokes[0]!.success([
       [1750000000000, "Pedoman Contoh", "PM/1", "Pedoman", "Direksi", "Direktur",
         "-", "Baru", "-", 1740000000000, "pdf-url", "-", "-", "", "Aktif", 7],
@@ -316,16 +343,29 @@ describe("google.script.run backend (adapter contract)", () => {
   it("rejects with the connection error when the server call fails (failure handler)", async () => {
     const { runnerFactory, invokes } = createFakeRunner();
     const api = createApi(createGoogleBackend(runnerFactory));
-    const promise = api.getAllData("tok-9");
+    const promise = api.getAllData(testSesi("tok-9"));
     invokes[0]!.failure(new Error("offline"));
     await expect(promise).rejects.toThrow("Koneksi error, coba lagi.");
+  });
+
+  it("expires the Sesi when the GAS failure handler reports its invalid-Sesi error", async () => {
+    const { runnerFactory, invokes } = createFakeRunner();
+    const onSessionExpired = vi.fn();
+    const api = createApi(createGoogleBackend(runnerFactory), { onSessionExpired });
+    const promise = api.getAllData(testSesi("expired-token"));
+    invokes[0]!.failure(new Error("Sesi tidak valid, silakan login ulang."));
+    await expect(promise).rejects.toMatchObject({
+      message: "Sesi tidak valid, silakan login ulang.",
+      sessionExpired: true,
+    });
+    expect(onSessionExpired).toHaveBeenCalledOnce();
   });
 
   it("raises the session-expired hook and rejects when flagged by the server", async () => {
     const { runnerFactory, invokes } = createFakeRunner();
     const onSessionExpired = vi.fn();
     const api = createApi(createGoogleBackend(runnerFactory), { onSessionExpired });
-    const promise = api.getPendingUsers("expired-tok");
+    const promise = api.getPendingUsers(testSesi("expired-tok"));
     invokes[0]!.success({ success: false, message: "Sesi tidak valid.", sessionExpired: true });
     await expect(promise).rejects.toMatchObject({ sessionExpired: true });
     expect(onSessionExpired).toHaveBeenCalledTimes(1);

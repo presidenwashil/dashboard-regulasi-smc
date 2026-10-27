@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useAdapter } from '../adapter/context';
 import { Modal, Pagination, type Notify } from '../components/Shared';
-import type { AdminUser, PendingUser } from '../adapter/types';
+import type { AdminUser, PendingUser, Sesi } from '../adapter/types';
 
 const PER_PAGE = 10;
 
@@ -13,11 +13,11 @@ const statusCls = (s: string): string =>
     : 'bg-red-500/20 text-red-400 border-red-500/50';
 
 interface Props {
-  token: string;
+  sesi: Sesi;
   notify: Notify;
 }
 
-export default function ApprovalPage({ token, notify }: Props) {
+export default function ApprovalPage({ sesi, notify }: Props) {
   const api = useAdapter();
   const [pending, setPending] = useState<PendingUser[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -29,10 +29,10 @@ export default function ApprovalPage({ token, notify }: Props) {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const [p, u] = await Promise.all([api.getPendingUsers(token), api.getAllUsers(token)]);
+    const [p, u] = await Promise.all([api.getPendingUsers(sesi), api.getAllUsers(sesi)]);
     setPending(p);
     setUsers(u);
-  }, [api, token]);
+  }, [api, sesi]);
 
   useEffect(() => {
     // Sinkronisasi dengan server Apps Script. setState terjadi setelah await.
@@ -42,7 +42,7 @@ export default function ApprovalPage({ token, notify }: Props) {
 
   const review = async (rowIndex: number, status: 'Approved' | 'Rejected') => {
     try {
-      const message = await api.setUserStatus(token, rowIndex, status);
+      const message = await api.setUserStatus(sesi, rowIndex, status);
       notify(message || 'Status diperbarui.');
       void load();
     } catch (e) {
@@ -57,7 +57,7 @@ export default function ApprovalPage({ token, notify }: Props) {
     if (pw.a !== pw.b) return setErr('Password dan ulangi password tidak sama.');
     setBusy(true);
     try {
-      const message = await api.resetUserPassword(token, target.rowIndex, pw.a);
+      const message = await api.resetUserPassword(sesi, target.rowIndex, pw.a);
       notify(message || 'Password direset.');
       setTarget(null);
     } catch (ex) {

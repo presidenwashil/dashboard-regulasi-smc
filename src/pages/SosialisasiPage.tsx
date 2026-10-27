@@ -29,7 +29,6 @@ interface Props {
 
 export default function SosialisasiPage({ docs, session, notify, onEdit }: Props) {
   const api = useAdapter();
-  const { token } = session;
   const isAdmin = session.user.role === 'Admin';
 
   const [readIds, setReadIds] = useState<number[]>([]);
@@ -43,11 +42,11 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
   const [detailRow, setDetailRow] = useState<number | null>(null);
 
   const loadRead = useCallback(async () => {
-    setReadIds(await api.getMyReadDocs(token));
+    setReadIds(await api.getMyReadDocs(session));
     if (isAdmin) {
-      setSummary(await api.getSosialisasiSummary(token));
+      setSummary(await api.getSosialisasiSummary(session));
     }
-  }, [api, token, isAdmin]);
+  }, [api, session, isAdmin]);
 
   const updateFilter = (patch: Partial<Filter>) => {
     setFilter((f) => ({ ...f, ...patch }));
@@ -96,7 +95,7 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
 
   if (detailRow !== null) {
     return (
-      <SosialisasiDetailPage docId={detailRow} token={token} notify={notify} onBack={() => setDetailRow(null)} />
+      <SosialisasiDetailPage docId={detailRow} sesi={session} notify={notify} onBack={() => setDetailRow(null)} />
     );
   }
 
@@ -125,7 +124,7 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
     setBusy(true);
     try {
       const docId = requireDocId(confirmDoc);
-      const message = await api.markDocumentRead(token, docId, confirmDoc.judul);
+      const message = await api.markDocumentRead(session, docId, confirmDoc.judul);
       setReadIds((ids) => [...ids, docId]);
       notify(message || 'Dokumen ditandai dibaca.');
       setConfirmDoc(null);

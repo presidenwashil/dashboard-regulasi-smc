@@ -68,7 +68,7 @@ export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
   const reloadDocs = useCallback(async () => {
     if (!session) return;
     try {
-      const documents = await appApi.getAllData(session.token);
+      const documents = await appApi.getAllData(session);
       documents.forEach(requireDocId);
       setDocs(documents);
     } catch (error) {
@@ -181,7 +181,7 @@ export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
       </nav>
 
       {tab === 'dashboard' && (
-        <DashboardPage docs={docs} token={session.token} notify={notify} onGoSosialisasi={() => goTab('sosialisasi')} />
+        <DashboardPage docs={docs} sesi={session} notify={notify} onGoSosialisasi={() => goTab('sosialisasi')} />
       )}
       {tab === 'sosialisasi' && (
         <SosialisasiPage docs={docs} session={session} notify={notify} onEdit={goEdit} />
@@ -190,7 +190,7 @@ export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
         <FormPage
           key={editing?.docId ?? 'new'}
           editing={editing}
-          token={session.token}
+          sesi={session}
           notify={notify}
           onSaved={() => {
             void reloadDocs();
@@ -198,7 +198,7 @@ export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
           }}
         />
       )}
-      {tab === 'approval' && isAdmin && <ApprovalPage token={session.token} notify={notify} />}
+      {tab === 'approval' && isAdmin && <ApprovalPage sesi={session} notify={notify} />}
 
       <Toast toast={toast} />
     </div>

@@ -21,7 +21,8 @@ without changing UI components.
 
 - UI code never references `google.script.run` directly; session-expiry handling is
   centralized in the adapter.
-- The mock must faithfully mirror the server contract established by `Code.js`
+- The mock must faithfully mirror the server contract established by the Apps
+  Script backend in `gas/`
   (`{success, message, data?, sessionExpired?}` responses, normalized NRP, etc.).
 - Any API claim must be verified against the real Apps Script environment before a
   feature is released.

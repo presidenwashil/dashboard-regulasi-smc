@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { useAdapter } from '../adapter/context';
-import type { Dokumen, DokumenInput, FilePayload, StatusBerlaku } from '../adapter/types';
+import type { Dokumen, DokumenInput, FilePayload, Sesi, StatusBerlaku } from '../adapter/types';
 import { AKREDITASI_OPTIONS, DATA_UNIT, JENIS_OPTIONS, PEMILIK_OPTIONS, fmtTanggalInput, requireDocId } from '../utils';
 import type { Notify } from '../components/Shared';
 
@@ -30,7 +30,7 @@ const readFile = (file: File | null): Promise<FilePayload | null> =>
 
 interface FormProps {
   editing: Dokumen | null;
-  token: string;
+  sesi: Sesi;
   notify: Notify;
   onSaved: () => void;
 }
@@ -106,7 +106,7 @@ interface FormInnerProps extends FormProps {
   master: string[];
 }
 
-function FormInner({ master, editing, token, notify, onSaved }: FormInnerProps) {
+function FormInner({ master, editing, sesi, notify, onSaved }: FormInnerProps) {
   const api = useAdapter();
   const [f, setF] = useState<FormState>(() => initialState(editing, master));
   const [pdf, setPdf] = useState<File | null>(null);
@@ -148,11 +148,11 @@ function FormInner({ master, editing, token, notify, onSaved }: FormInnerProps) 
         keterangan: f.keterangan,
       };
       const message = editing
-        ? await api.updateDataWithFiles(token, payload, requireDocId(editing), {
+        ? await api.updateDataWithFiles(sesi, payload, requireDocId(editing), {
             existingPdfUrl: editing.pdfUrl,
             existingWordUrl: editing.wordUrl,
           })
-        : await api.saveDataWithFiles(token, payload);
+        : await api.saveDataWithFiles(sesi, payload);
       notify(message || 'Tersimpan.');
       onSaved();
     } catch (err) {

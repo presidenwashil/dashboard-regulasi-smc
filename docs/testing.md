@@ -36,16 +36,19 @@ ticket. The rules below are the concrete application of the decisions in spec
 
 1. **Adapter contract tests** (`src/adapter/*.test.ts`) pin what the server seam
    does: legacy raw shapes → typed domain objects, envelope semantics
-   (resolve on success / reject `AdapterError` on failure / `sessionExpired`
-   hook then reject / connection error on transport failure), token as the
-   explicit first argument, and legacy request payloads built by the adapter
-   (joined lists, `"-"` placeholders, files omitted on edit).
+   (resolve on success / reject `AdapterError` on failure / expired-Sesi hook
+   then reject / connection error on transport failure), the Sesi credential
+   forwarded as the server's explicit first argument, and legacy request
+   payloads built by the adapter (joined lists, `"-"` placeholders, files
+   omitted on edit). The real GAS expiry message may arrive without a flag, or
+   as a rejected `getAllData` call.
    Gotcha: pending accounts return the *credentials* error when the password is
    wrong — the status branch only fires for the right password.
 2. **Mock fidelity tests** (`src/adapter/mock/backend.fidelity.test.ts`) pin the
-   mock backend to the same contracts the real `Code.js` serves: role gates
+   mock backend to the same contracts the real Apps Script backend in `gas/`
+   serves: role gates
    (`"Akses ditolak."`), session expiry flags, duplicate-read collapse (first
-   record wins), messages verbatim from `Code.js`, seeded states
+   record wins), messages verbatim from the backend, seeded states
    (approved/pending/rejected, Admin/User, Baru/Revisi, Aktif/Non-Aktif/Dicabut,
    with/without files). The mock answering differently than the server is a
    production bug waiting anywhere components rely on it.
