@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { LOGO_MUTU, LOGO_SMC } from './utils';
 import { Toast, type ToastState } from './components/Shared';
 import { createDefaultAppApi, isDevBackend } from './adapter/install';
 import { AdapterProvider } from './adapter/provider';
 import type { Adapter, ApiHooks } from './adapter';
-import type { Dokumen, Sesi } from './adapter/types';
+import { AdapterError, type Dokumen, type Sesi } from './adapter/types';
 import { clearSesi, loadSesi, saveSesi } from './sesi/sesi';
 import { RoleSwitcher } from './dev/role-switcher';
 import AuthPage from './pages/AuthPage';
@@ -68,6 +68,8 @@ export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
   const [docs, setDocs] = useState<Doc[]>([]);
   const [editing, setEditing] = useState<Doc | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const sessionExpiryHandled = useRef(false);
+  const sessionExpiryMessageShown = useRef(false);
 
   const notify = useCallback((msg: string, isError = false) => {
     setToast({ msg, isError });
@@ -82,13 +84,25 @@ export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
     setTab('dashboard');
   }, []);
 
-  const [appApi] = useState(() => createAdapter({ onSessionExpired: clearSession }));
+  const handleSessionExpired = useCallback(() => {
+    if (sessionExpiryHandled.current) return;
+    sessionExpiryHandled.current = true;
+    clearSession();
+  }, [clearSession]);
+
+  // The expiry hook is invoked asynchronously by the Adapter after a server response.
+  // oxlint-disable-next-line react/refs
+  const [appApi] = useState(() => createAdapter({ onSessionExpired: handleSessionExpired }));
 
   const reloadDocs = useCallback(async () => {
     if (!session) return;
     try {
       setDocs((await appApi.getAllData(session.token)).map(toLegacyDoc));
     } catch (error) {
+      if (error instanceof AdapterError && error.sessionExpired) {
+        if (sessionExpiryMessageShown.current) return;
+        sessionExpiryMessageShown.current = true;
+      }
       notify(error instanceof Error ? error.message : String(error), true);
     }
   }, [appApi, session, notify]);
@@ -100,6 +114,8 @@ export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
   }, [session, reloadDocs]);
 
   const handleLogin = (sesi: Sesi) => {
+    sessionExpiryHandled.current = false;
+    sessionExpiryMessageShown.current = false;
     saveSesi(sesi);
     setSession(sesi);
     setDocs([]);

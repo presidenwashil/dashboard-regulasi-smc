@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { StrictMode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { createApi, type ApiHooks, type Adapter } from "./adapter";
@@ -44,8 +45,8 @@ describe("App adapter and Sesi lifecycle", () => {
   });
 
   it("clears an expired Sesi and returns to login with the server message once", async () => {
-    const onExpired = vi.fn();
     saveSesi(storedSesi);
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
     const createAdapter = (hooks: ApiHooks) => {
       const backend = createMockBackend();
       backend.getAllData = () => ({
@@ -53,17 +54,18 @@ describe("App adapter and Sesi lifecycle", () => {
         message: "Sesi tidak valid, silakan login ulang.",
         sessionExpired: true,
       });
-      return createApi(backend, { ...hooks, onSessionExpired: () => {
-        onExpired();
-        hooks.onSessionExpired?.();
-      } });
+      return createApi(backend, hooks);
     };
 
-    render(<App createAdapter={createAdapter} />);
+    render(
+      <StrictMode>
+        <App createAdapter={createAdapter} />
+      </StrictMode>,
+    );
 
     expect(await screen.findByRole("button", { name: "Masuk" })).toBeInTheDocument();
     expect(await screen.findByText("Sesi tidak valid, silakan login ulang.")).toBeInTheDocument();
     expect(sessionStorage.getItem("dashboard-regulasi-sesi")).toBeNull();
-    expect(onExpired).toHaveBeenCalledTimes(1);
+    expect(setTimeoutSpy.mock.calls.filter(([, delay]) => delay === 4000)).toHaveLength(1);
   });
 });
