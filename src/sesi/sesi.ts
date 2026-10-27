@@ -6,8 +6,10 @@ import type { Sesi } from "../adapter/types";
  * behavior inside the GAS sandbox iframe, until server-side expiry (6 jam).
  */
 const SESI_KEY = "dashboard-regulasi-sesi";
+const LEGACY_SESSION_KEY = "sessionData";
 
 export function loadSesi(): Sesi | null {
+  sessionStorage.removeItem(LEGACY_SESSION_KEY);
   try {
     const raw = sessionStorage.getItem(SESI_KEY);
     if (!raw) return null;
@@ -29,7 +31,7 @@ export function saveSesi(sesi: Sesi): void {
 
 export function clearSesi(): void {
   sessionStorage.removeItem(SESI_KEY);
+  sessionStorage.removeItem(LEGACY_SESSION_KEY);
 }
-
 
 
