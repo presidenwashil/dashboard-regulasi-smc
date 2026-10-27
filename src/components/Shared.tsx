@@ -4,6 +4,8 @@ export const ICON_BTN = 'p-1.5 bg-gray-900 rounded-lg border border-gray-700 tra
 const BTN_PAGE =
   'px-4 py-2 bg-gray-700 hover:bg-cyan-600 disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed text-gray-200 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1 border border-gray-600 disabled:border-gray-700';
 
+export type Notify = (msg: string, isError?: boolean) => void;
+
 export interface ToastState {
   msg: string;
   isError: boolean;

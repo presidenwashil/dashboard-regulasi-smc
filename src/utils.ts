@@ -1,4 +1,4 @@
-import type { Doc } from './types';
+import type { Dokumen } from './adapter/types';
 
 export const LOGO_MUTU = 'https://drive.google.com/thumbnail?id=1Mj4LOwmDCUM-CxdKKxb1MI2JLNghSkLT&sz=w400';
 export const LOGO_SMC = 'https://drive.google.com/thumbnail?id=1OEJsSMUEl2AZbuRz5xyFUkh-R2RI6-U8&sz=w400';
@@ -27,29 +27,16 @@ export const DATA_UNIT: Record<string, readonly string[]> = {
   Komite: ['Komite Mutu', 'Komite K3RS', 'Komite PPI', 'Komite Medik', 'Komite Keperawatan', 'SPI', 'KPRS', 'Komite Tenakes Lainnya'],
 };
 
-/** Memetakan satu baris sheet (15 kolom + rowIndex di indeks 15) ke objek Doc. */
-export const toDoc = (r: unknown[]): Doc => ({
-  rowIndex: r[15] as number,
-  ts: r[0] as number | string,
-  judul: String(r[1] ?? ''),
-  nomor: String(r[2] ?? ''),
-  jenis: String(r[3] ?? ''),
-  pemilik: String(r[4] ?? ''),
-  unit: String(r[5] ?? ''),
-  bidang: String(r[6] ?? ''),
-  status: String(r[7] ?? ''),
-  revisi: (r[8] as string | number) ?? '',
-  tanggal: r[9] as number | string,
-  pdfUrl: String(r[10] ?? ''),
-  wordUrl: String(r[11] ?? ''),
-  akreditasi: String(r[12] ?? ''),
-  keterangan: String(r[13] ?? ''),
-  statusBerlaku: (r[14] as string) || 'Aktif',
-});
+export const isAktif = (d: Dokumen): boolean => d.statusBerlaku === 'Aktif';
 
-export const isAktif = (d: Doc): boolean => (d.statusBerlaku || 'Aktif') === 'Aktif';
+export const requireDocId = (document: Dokumen): number => {
+  if (document.docId === undefined) {
+    throw new Error(`Dokumen "${document.judul}" tidak memiliki ID baris.`);
+  }
+  return document.docId;
+};
 
-export const yearOf = (d: Doc): number | null =>
+export const yearOf = (d: Dokumen): number | null =>
   d.tanggal ? new Date(d.tanggal).getFullYear() : null;
 
 export const countBy = <T,>(arr: T[], keyFn: (x: T) => string | number | null | undefined): Record<string, number> =>
@@ -59,7 +46,7 @@ export const countBy = <T,>(arr: T[], keyFn: (x: T) => string | number | null | 
     return acc;
   }, {});
 
-export const fmtTanggalInput = (ms: number | string): string => {
+export const fmtTanggalInput = (ms: number): string => {
   const d = new Date(ms);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };

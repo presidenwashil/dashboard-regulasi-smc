@@ -39,13 +39,35 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     await expect(api.loginUser("1059", "pw")).rejects.toBeInstanceOf(AdapterError);
   });
 
-  it("invokes the session-expired hook and rejects when the envelope flags sessionExpired", async () => {
+  it("invokes the session-expired hook and rejects even when the envelope succeeds", async () => {
     const backend = {
-      getAllData: () => ({ success: false, message: "Sesi tidak valid.", sessionExpired: true }),
+      getAllData: () => ({ success: true, message: "Sesi tidak valid.", sessionExpired: true }),
     } as unknown as Backend;
     const onSessionExpired = vi.fn();
     const api = createApi(backend, { onSessionExpired });
-    await expect(api.getAllData("tok-expired")).rejects.toMatchObject({ sessionExpired: true });
+    await expect(api.getAllData("tok-expired")).rejects.toMatchObject({
+      message: "Sesi tidak valid.",
+      sessionExpired: true,
+    });
+    expect(onSessionExpired).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a successful session-expired envelope on ordinary Adapter calls", async () => {
+    const backend = {
+      loginUser: () => ({
+        success: true,
+        message: "Sesi tidak valid.",
+        sessionExpired: true,
+        token: "unexpected-token",
+        user: { nama: "Unexpected", nrp: "0000", role: "User" },
+      }),
+    } as unknown as Backend;
+    const onSessionExpired = vi.fn();
+    const api = createApi(backend, { onSessionExpired });
+    await expect(api.loginUser("0000", "pw")).rejects.toMatchObject({
+      message: "Sesi tidak valid.",
+      sessionExpired: true,
+    });
     expect(onSessionExpired).toHaveBeenCalledTimes(1);
   });
 
@@ -101,6 +123,13 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     expect(calls).toContainEqual(["getAllData", "tok-9"]);
     expect(calls).toContainEqual(["getAllUsers", "tok-9"]);
     expect(calls).toContainEqual(["markDocumentRead", "tok-9", 7, "Pedoman Contoh"]);
+  });
+
+  it("leaves an omitted read-confirmation message empty for the screen fallback", async () => {
+    const backend = {
+      markDocumentRead: () => ({ success: true }),
+    } as unknown as Backend;
+    await expect(createApi(backend).markDocumentRead("tok", 7, "SPO Ujian")).resolves.toBe("");
   });
 
   it("logs out the whole Sesi while the token stays inside the seam", async () => {
@@ -191,7 +220,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
       {
         judul: "SPO Ujian", nomor: "SPO/RM/003", jenis: "SPO", pemilik: "Casemix", unit: "Data Entry",
         bidang: "-", status: "Baru", revisi: "-", tanggal: "2026-05-01",
-        akreditasi: "-", keterangan: "", statusBerlaku: "Aktif",
+        akreditasi: "-", keterangan: "-", statusBerlaku: "Aktif",
         existingPdfUrl: "https://docs.google.com/document/d/keep/view",
         existingWordUrl: "",
       },

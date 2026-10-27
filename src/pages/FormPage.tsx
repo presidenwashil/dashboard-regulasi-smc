@@ -1,7 +1,8 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
-import { api } from '../api';
-import { AKREDITASI_OPTIONS, DATA_UNIT, JENIS_OPTIONS, PEMILIK_OPTIONS, fmtTanggalInput } from '../utils';
-import type { Doc, FilePayload, Notify, SaveDocPayload } from '../types';
+import { useAdapter } from '../adapter/context';
+import type { Dokumen, DokumenInput, FilePayload, StatusBerlaku } from '../adapter/types';
+import { AKREDITASI_OPTIONS, DATA_UNIT, JENIS_OPTIONS, PEMILIK_OPTIONS, fmtTanggalInput, requireDocId } from '../utils';
+import type { Notify } from '../components/Shared';
 
 const inp = 'w-full px-4 py-2.5 rounded-lg text-sm';
 const lbl = 'block text-sm font-semibold text-gray-300 mb-1.5';
@@ -28,21 +29,22 @@ const readFile = (file: File | null): Promise<FilePayload | null> =>
   });
 
 interface FormProps {
-  editing: Doc | null;
+  editing: Dokumen | null;
   token: string;
   notify: Notify;
   onSaved: () => void;
 }
 
 export default function FormPage(props: FormProps) {
+  const api = useAdapter();
   const { notify } = props;
   const [master, setMaster] = useState<string[] | null>(null);
 
   useEffect(() => {
     api.getMasterBidang()
-      .then((r) => (r.success && r.data ? setMaster(r.data) : notify(r.message ?? 'Gagal memuat bidang.', true)))
+      .then(setMaster)
       .catch((e: Error) => notify(e.message, true));
-  }, [notify]);
+  }, [api, notify]);
 
   if (!master) return <div className="p-8 text-center text-cyan-400">Memuat master bidang...</div>;
   return <FormInner master={master} {...props} />;
@@ -65,7 +67,7 @@ interface FormState {
   keterangan: string;
 }
 
-function initialState(d: Doc | null, master: string[]): FormState {
+function initialState(d: Dokumen | null, master: string[]): FormState {
   const blank: FormState = {
     judul: '', nomor: '', jenis: '', jenisLainnya: '', pemilik: '', unit: '',
     bidang: [], bidangLainnya: '', status: '', revisi: '', tanggal: '',
@@ -74,9 +76,8 @@ function initialState(d: Doc | null, master: string[]): FormState {
   if (!d) return blank;
 
   const jenisKnown = (JENIS_OPTIONS as string[]).includes(d.jenis);
-  const bidangArr = d.bidang.split(', ').filter((b) => b && b !== '-');
-  const known = bidangArr.filter((b) => master.includes(b));
-  const other = bidangArr.filter((b) => !master.includes(b));
+  const known = d.bidang.filter((b) => master.includes(b));
+  const other = d.bidang.filter((b) => !master.includes(b));
 
   return {
     judul: d.judul,
@@ -87,13 +88,18 @@ function initialState(d: Doc | null, master: string[]): FormState {
     unit: d.unit && d.unit !== '-' ? d.unit : '',
     bidang: other.length ? [...known, 'Lainnya'] : known,
     bidangLainnya: other.join(', '),
-    status: d.status,
-    revisi: d.status === 'Revisi' ? String(d.revisi) : '',
-    tanggal: d.tanggal ? fmtTanggalInput(d.tanggal) : '',
+    status: d.statusDokumen ?? '',
+    revisi: d.statusDokumen === 'Revisi' ? d.revisi ?? '' : '',
+    tanggal: d.tanggal === null ? '' : fmtTanggalInput(d.tanggal),
     statusBerlaku: d.statusBerlaku || 'Aktif',
-    akreditasi: d.akreditasi.split(', ').filter((a) => a && a !== '-'),
+    akreditasi: d.akreditasi,
     keterangan: d.keterangan && d.keterangan !== '-' ? d.keterangan : '',
   };
+}
+
+function toStatusBerlaku(value: string): StatusBerlaku {
+  if (value === 'Non-Aktif' || value === 'Dicabut') return value;
+  return 'Aktif';
 }
 
 interface FormInnerProps extends FormProps {
@@ -101,6 +107,7 @@ interface FormInnerProps extends FormProps {
 }
 
 function FormInner({ master, editing, token, notify, onSaved }: FormInnerProps) {
+  const api = useAdapter();
   const [f, setF] = useState<FormState>(() => initialState(editing, master));
   const [pdf, setPdf] = useState<File | null>(null);
   const [word, setWord] = useState<File | null>(null);
@@ -124,29 +131,29 @@ function FormInner({ master, editing, token, notify, onSaved }: FormInnerProps) 
         ...f.bidang.filter((b) => b !== 'Lainnya'),
         ...(f.bidang.includes('Lainnya') && f.bidangLainnya.trim() ? [f.bidangLainnya.trim()] : []),
       ];
-      const payload: SaveDocPayload = {
+      const payload: DokumenInput = {
         judul: f.judul,
         nomor: f.nomor,
         jenis: f.jenis === 'Lainnya' ? f.jenisLainnya : f.jenis,
         pemilik: f.pemilik,
-        unit: f.unit || '-',
-        bidang: bidangFinal.join(', ') || '-',
-        status: f.status,
-        revisi: f.status === 'Revisi' ? f.revisi : '0',
-        tanggal: f.tanggal,
-        statusBerlaku: f.statusBerlaku,
+        unit: f.unit,
+        bidang: bidangFinal,
+        statusDokumen: f.status === 'Revisi' ? 'Revisi' : 'Baru',
+        revisi: f.status === 'Revisi' ? f.revisi : null,
+        tanggal: f.tanggal || null,
+        statusBerlaku: toStatusBerlaku(f.statusBerlaku),
         pdfFile: await readFile(pdf),
         wordFile: await readFile(word),
-        existingPdfUrl: editing?.pdfUrl ?? '',
-        existingWordUrl: editing?.wordUrl ?? '',
-        akreditasi: f.akreditasi.join(', ') || '-',
-        keterangan: f.keterangan || '-',
+        akreditasi: f.akreditasi,
+        keterangan: f.keterangan,
       };
-      const r = editing
-        ? await api.updateDoc(token, payload, editing.rowIndex)
-        : await api.saveDoc(token, payload);
-      if (!r.success) throw new Error(r.message);
-      notify(r.message ?? 'Tersimpan.');
+      const message = editing
+        ? await api.updateDataWithFiles(token, payload, requireDocId(editing), {
+            existingPdfUrl: editing.pdfUrl,
+            existingWordUrl: editing.wordUrl,
+          })
+        : await api.saveDataWithFiles(token, payload);
+      notify(message || 'Tersimpan.');
       onSaved();
     } catch (err) {
       notify((err as Error).message, true);

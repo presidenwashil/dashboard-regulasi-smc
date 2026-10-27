@@ -111,8 +111,12 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
       // app surfaces this exact message.
       throw new AdapterError(CONNECTION_ERROR, false);
     }
-    if (envelope && envelope.sessionExpired) {
+    if (envelope?.sessionExpired) {
       hooks.onSessionExpired?.();
+      throw new AdapterError(
+        envelope.message ?? "Terjadi kesalahan pada server.",
+        true,
+      );
     }
     if (!envelope || !envelope.success) {
       throw new AdapterError(
@@ -164,6 +168,10 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
       const envelope = response as ServerEnvelope;
       if (envelope?.sessionExpired) {
         hooks.onSessionExpired?.();
+        throw new AdapterError(
+          envelope.message ?? "Terjadi kesalahan pada server.",
+          true,
+        );
       }
       if (!envelope || !envelope.success) {
         throw new AdapterError(
@@ -179,7 +187,7 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
         token,
         { ...toLegacyDocPayload(input), pdfFile: input.pdfFile, wordFile: input.wordFile },
       );
-      return response.message ?? "Data dan File berhasil disimpan!";
+      return response.message ?? "";
     },
     async updateDataWithFiles(token, input, docId, existingLinks) {
       // Edit mode omits files entirely — the server then keeps the existing
@@ -194,11 +202,11 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
         },
         docId,
       );
-      return response.message ?? "Data berhasil diperbarui!";
+      return response.message ?? "";
     },
     async markDocumentRead(token, docId, judul) {
       const response = await call<ServerEnvelope>("markDocumentRead", token, docId, judul);
-      return response.message ?? "Dokumen ditandai sudah dibaca.";
+      return response.message ?? "";
     },
     async getMyReadDocs(token) {
       const envelope = await call<ServerEnvelope>("getMyReadDocs", token);
@@ -303,13 +311,13 @@ function toLegacyDocPayload(input: DokumenInput) {
     nomor: input.nomor,
     jenis: input.jenis,
     pemilik: input.pemilik,
-    unit: input.unit,
+    unit: input.unit || "-",
     bidang: joined(input.bidang),
     status: input.statusDokumen,
     revisi: input.revisi ?? "-",
     tanggal: input.tanggal ?? "",
     akreditasi: joined(input.akreditasi),
-    keterangan: input.keterangan,
+    keterangan: input.keterangan || "-",
     statusBerlaku: input.statusBerlaku || "Aktif",
   };
 }
