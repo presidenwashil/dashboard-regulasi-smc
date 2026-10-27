@@ -39,10 +39,11 @@ leaves the machine-readable report at `./.vitest/json/output.json`
 args (`-d "a b c"`) become separate words of the child command. Use
 `scripts/lib/spawn.mjs` (`runCommand`), which quotes for `cmd.exe` on win32.
 
-## Clasp CLI (Apps Script), run from `../bank-dokumen`
+## Clasp CLI (Apps Script), run from the repo root
 
-The sibling repo's `.clasp.json` carries the project id; run `clasp` there
-(`scripts/ship*.mjs` already do). Command map learned by trial:
+The root `.clasp.json` carries the project id and points `rootDir` at `gas/`;
+run `clasp` from the repo root (`scripts/ship*.mjs` already do). Command map
+learned by trial:
 
 - `clasp deployments` — list deployments. The word `list` is **not** a
   subcommand (it becomes a stray scriptId argument → "Invalid ID").

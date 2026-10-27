@@ -2,7 +2,8 @@
 
 The compliance-dashboard domain of RS Samarinda Medika Citra: staff read regulatory
 documents, confirm their understanding (sosialisasi), and administrators manage
-documents, accounts, and progress. The Apps Script backend (`bank-dokumen`) is the
+documents, accounts, and progress. The Apps Script backend (`gas/` in this
+repo) is the
 source of truth for server-side behavior; the canonical domain docs live in this repo.
 
 ## Language

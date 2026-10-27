@@ -5,7 +5,10 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const CONFIG_FILE = 'ship.config.json'
-export const SIBLING_REPO = 'bank-dokumen'
+// The Apps Script backend is vendored in this repo (the "re-code from
+// scratch" human decision); clasp pushes via the root .clasp.json, whose
+// rootDir points at this directory.
+export const GAS_DIR = 'gas'
 export const VERIFICATION_DESCRIPTION = 'verification: React replatform client'
 
 export function repoRoot() {
@@ -13,6 +16,6 @@ export function repoRoot() {
   return path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))))
 }
 
-export function siblingRepo(rootDir) {
-  return path.resolve(rootDir, '..', SIBLING_REPO)
+export function gasDir(rootDir) {
+  return path.resolve(rootDir, GAS_DIR)
 }

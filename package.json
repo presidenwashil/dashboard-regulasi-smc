@@ -6,7 +6,7 @@
   "scripts": {
     "build": "vite build && node scripts/copy-html.mjs",
     "dev": "vite",
-    "deploy:dev": "npm typecheck && npm test && npm run build && clasp push -f",
+    "deploy:dev": "npm run typecheck && npm run lint && npm run test && npm run build && clasp push -f",
     "lint": "oxlint",
     "preview": "vite preview",
     "typecheck": "tsc -b",

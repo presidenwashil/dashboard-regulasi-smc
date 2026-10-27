@@ -9,7 +9,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { buildSteps, loadConfig, runPipeline } from './ship.mjs'
 
 const ROOT = process.cwd()
-const SIBLING = path.resolve(ROOT, '..', 'bank-dokumen')
+const GAS = path.join(ROOT, 'gas')
 
 function fakeDeps({ failStep, failCopy } = {}) {
   const log = []
@@ -79,20 +79,20 @@ describe('runPipeline', () => {
 })
 
 describe('buildSteps', () => {
-  it('copies the built single file into the Apps Script repo', () => {
+  it('copies the built single file into the vendored gas/ backend', () => {
     const steps = buildSteps(ROOT, { verificationDeploymentId: 'AKfycb_V' })
     const copy = steps.find((s) => s.name === 'copy artifact')
 
     expect(copy.copy.src).toBe(path.join(ROOT, 'dist', 'index.html'))
-    expect(copy.copy.dst).toBe(path.join(SIBLING, 'Index.html'))
+    expect(copy.copy.dst).toBe(path.join(GAS, 'Index.html'))
   })
 
-  it('pushes with clasp from the Apps Script repo directory', () => {
+  it('pushes with clasp from the repo root (root .clasp.json → gas/)', () => {
     const steps = buildSteps(ROOT, { verificationDeploymentId: 'AKfycb_V' })
     const push = steps.find((s) => s.name === 'clasp push')
 
     expect(push.cmd).toEqual(['clasp', 'push'])
-    expect(push.cwd).toBe(SIBLING)
+    expect(push.cwd).toBe(ROOT)
   })
 
   it('redeploys only the configured verification deployment', () => {
@@ -100,7 +100,7 @@ describe('buildSteps', () => {
     const redeploy = steps.find((s) => s.name === 'redeploy verification')
 
     expect(redeploy.cmd).toContain('AKfycb_V')
-    expect(redeploy.cwd).toBe(SIBLING)
+    expect(redeploy.cwd).toBe(ROOT)
   })
 })
 

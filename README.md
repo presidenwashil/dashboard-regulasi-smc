@@ -1,8 +1,8 @@
-# Dashboard Regulasi — React client
+# Dashboard Regulasi - React client
 
-The Vite + React + TypeScript client for the Dashboard Regulasi RS Samarinda
-Medika Citra hospital app, currently being replatformed from the vanilla
-Apps Script app in the sibling repo `../bank-dokumen` (the parity baseline).
+The Vite + React + TypeScript client **and** the Apps Script backend
+(`gas/`) for the Dashboard Regulasi RS Samarinda Medika Citra hospital app,
+replatforming the vanilla Apps Script app it replaced (the parity baseline).
 
 Canonical docs live here: `GLOSSARY.md` (domain language), `docs/adr/`
 (platform decisions), `docs/testing.md` (test conventions), `AGENTS.md` (agent
@@ -17,7 +17,7 @@ guidance). The replatform spec and its tickets live as GitHub issues.
 | `npm run typecheck` | `tsc -b` |
 | `npm run lint` | oxlint |
 | `npm run test` / `npm run test:watch` | Vitest suite (component + contract + mock fidelity) |
-| `npm run ship` | validate → build → copy to `../bank-dokumen/Index.html` → `clasp push` → update the verification deployment (see `docs/ship.md`) |
+| `npm run ship` | validate → build → copy to `gas/Index.html` → `clasp push` → update the verification deployment (see `docs/ship.md`) |
 | `npm run release` | _(final ticket)_ explicit-only production cutover |
 
 Production behavior (`google.script.run`) only exists inside the Apps Script
