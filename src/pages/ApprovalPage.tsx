@@ -5,6 +5,19 @@ import type { AdminUser, PendingUser, Sesi } from '../adapter/types';
 
 const PER_PAGE = 10;
 
+function filterByNameAndNrp<T extends { nama: string; nrp: string }>(
+  users: T[],
+  name: string,
+  nrp: string,
+): T[] {
+  const normalizedName = name.trim().toLowerCase();
+  const normalizedNrp = nrp.trim().toLowerCase();
+  return users.filter((user) =>
+    user.nama.toLowerCase().includes(normalizedName) &&
+    user.nrp.toLowerCase().includes(normalizedNrp)
+  );
+}
+
 const statusCls = (s: string): string =>
   s === 'Approved'
     ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
@@ -71,14 +84,8 @@ export default function ApprovalPage({ sesi, notify }: Props) {
     }
   };
 
-  const pendingMatches = pending.filter((u) =>
-    u.nama.toLowerCase().includes(pendingName.trim().toLowerCase()) &&
-    u.nrp.toLowerCase().includes(pendingNrp.trim().toLowerCase())
-  );
-  const userMatches = users.filter((u) =>
-    u.nama.toLowerCase().includes(userName.trim().toLowerCase()) &&
-    u.nrp.toLowerCase().includes(userNrp.trim().toLowerCase())
-  );
+  const pendingMatches = filterByNameAndNrp(pending, pendingName, pendingNrp);
+  const userMatches = filterByNameAndNrp(users, userName, userNrp);
   const pp = Math.min(pPage, Math.max(0, Math.ceil(pendingMatches.length / PER_PAGE) - 1));
   const up = Math.min(uPage, Math.max(0, Math.ceil(userMatches.length / PER_PAGE) - 1));
   const pendingRows = pendingMatches.slice(pp * PER_PAGE, (pp + 1) * PER_PAGE);
