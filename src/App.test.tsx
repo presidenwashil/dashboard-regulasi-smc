@@ -49,11 +49,9 @@ describe("App adapter and Sesi lifecycle", () => {
     const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
     const createAdapter = (hooks: ApiHooks) => {
       const backend = createMockBackend();
-      backend.getAllData = () => ({
-        success: false,
-        message: "Sesi tidak valid, silakan login ulang.",
-        sessionExpired: true,
-      });
+      backend.getAllData = () => {
+        throw new Error("Sesi tidak valid, silakan login ulang.");
+      };
       return createApi(backend, hooks);
     };
 

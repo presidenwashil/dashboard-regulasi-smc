@@ -9,13 +9,13 @@ describe("FormPage with the mock Adapter", () => {
   it("prefills edit fields from normalized document values", async () => {
     const api = createApi(createMockBackend());
     const sesi = await api.loginUser("admin01", "demo-ganti-saya");
-    const docs = await api.getAllData(sesi.token);
+    const docs = await api.getAllData(sesi);
     const document = docs.find((doc) => doc.judul === "Pedoman Penanganan Risiko Rumah Zakat");
     expect(document).toBeDefined();
 
     render(
       <AdapterProvider api={api}>
-        <FormPage editing={document!} token={sesi.token} notify={vi.fn()} onSaved={vi.fn()} />
+        <FormPage editing={document!} sesi={sesi} notify={vi.fn()} onSaved={vi.fn()} />
       </AdapterProvider>,
     );
 

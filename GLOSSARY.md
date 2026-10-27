@@ -34,7 +34,8 @@ The Admin action that moves a Pending account to Approved (or rejects/deactivate
 
 **Sesi**:
 The short-lived login credential representing an approved User. When it expires, the
-server flags the response (`sessionExpired`) and the client logs the User out.
+server returns the invalid-Sesi message (as an error envelope or a failed GAS call),
+and the adapter logs the User out.
 _Avoid_: token (in UI code)
 
 ### Documents

@@ -1,34 +1,34 @@
 import { useEffect, useState } from 'react';
 import { useAdapter } from '../adapter/context';
 import { fmtWaktu } from '../utils';
-import type { SosialisasiDetailData, SosialisasiPerson } from '../adapter/types';
+import type { Sesi, SosialisasiDetailData, SosialisasiPerson } from '../adapter/types';
 import type { Notify } from '../components/Shared';
 
 interface Props {
   docId: number;
-  token: string;
+  sesi: Sesi;
   notify: Notify;
   onBack: () => void;
 }
 
 type Tab = 'sudah' | 'belum';
 
-export default function SosialisasiDetailPage({ docId, token, notify, onBack }: Props) {
+export default function SosialisasiDetailPage({ docId, sesi, notify, onBack }: Props) {
   const api = useAdapter();
   const [data, setData] = useState<SosialisasiDetailData | null>(null);
   const [tab, setTab] = useState<Tab>('sudah');
   const [pdfBusy, setPdfBusy] = useState(false);
 
   useEffect(() => {
-    api.getSosialisasiDetail(token, docId)
+    api.getSosialisasiDetail(sesi, docId)
       .then(setData)
       .catch((e: Error) => notify(e.message, true));
-  }, [api, token, docId, notify]);
+  }, [api, sesi, docId, notify]);
 
   const downloadPdf = async () => {
     setPdfBusy(true);
     try {
-      const rekap = await api.generateSosialisasiPdf(token, docId);
+      const rekap = await api.generateSosialisasiPdf(sesi, docId);
       const bytes = Uint8Array.from(atob(rekap.base64), (c) => c.charCodeAt(0));
       const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
       const a = Object.assign(document.createElement('a'), { href: url, download: rekap.filename });

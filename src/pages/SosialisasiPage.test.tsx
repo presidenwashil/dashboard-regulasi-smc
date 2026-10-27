@@ -11,7 +11,7 @@ describe("SosialisasiPage with the mock Adapter", () => {
     const user = userEvent.setup();
     const api = createApi(createMockBackend());
     const session = await api.loginUser("0042", "demo-farah");
-    const docs = await api.getAllData(session.token);
+    const docs = await api.getAllData(session);
 
     render(
       <AdapterProvider api={api}>
