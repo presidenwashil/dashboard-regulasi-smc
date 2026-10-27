@@ -35,7 +35,7 @@ export function createGoogleBackend(runnerFactory: () => GoogleScriptRunner) {
     registerUser: (data: unknown) => callServer("registerUser", data),
     logoutSession: (token: string) => callServer("logoutSession", token),
     getMasterBidang: () => callServer("getMasterBidang"),
-    getAllData: () => callServer("getAllData"),
+    getAllData: (token: string) => callServer("getAllData", token),
     saveDataWithFiles: (token: string, data: unknown) => callServer("saveDataWithFiles", token, data),
     updateDataWithFiles: (token: string, data: unknown, rowIndex: unknown) =>
       callServer("updateDataWithFiles", token, data, rowIndex),

@@ -13,7 +13,15 @@ export default defineConfig({
     assetsInlineLimit: 100_000_000,
   },
   test: {
-    include: ['tests/react/**/*.test.{ts,tsx}', 'tests/gas/**/*.test.ts'],
+    // Default gate collects every suite, matching docs/testing.md placement:
+    // colocated app suites (src/**), the react/gas trees under tests/, and the
+    // colocated node-tooling suites under scripts/. Nothing is silently skipped.
+    include: [
+      'tests/react/**/*.test.{ts,tsx}',
+      'tests/gas/**/*.test.ts',
+      'src/**/*.test.{ts,tsx}',
+      'scripts/**/*.test.{mjs,cjs}',
+    ],
     setupFiles: ['tests/react/setup.ts'],
     environment: 'jsdom',
   },

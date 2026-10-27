@@ -45,8 +45,12 @@ export type Adapter = {
   registerUser(input: RegistrasiInput): Promise<string>;
   /** Public master list of Bidang (used by Registrasi and the Dokumen form). */
   getMasterBidang(): Promise<string[]>;
-  /** All regulation documents, newest sheet row first, normalized. */
-  getAllData(): Promise<Dokumen[]>;
+  /**
+   * All regulation documents, newest sheet row first, normalized. The Sesi
+   * credential is the explicit first argument: the real getAllData requires
+   * it and throws on an invalid Sesi.
+   */
+  getAllData(token: string): Promise<Dokumen[]>;
   /** Create a Dokumen with Drive-file upload payloads. */
   saveDataWithFiles(token: string, input: DokumenInput): Promise<string>;
   /** Edit a Dokumen; omitted files keep the existing Drive links. */
@@ -139,8 +143,34 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
         .map((value) => (value === null || value === undefined ? "" : String(value).trim()))
         .filter(Boolean);
     },
-    async getAllData() {
-      const envelope = await call<ServerEnvelope>("getAllData");
+    async getAllData(token: string) {
+      // The real getAllData (gas/Documents.gs) is the one server call without
+      // an envelope: it requires the Sesi credential — throwing on an invalid
+      // Sesi, which reaches the adapter as a transport failure — and answers a
+      // bare rows array. The enveloped shape stays tolerated (e.g. mock/test
+      // backends), with identical envelope semantics. Raw positional rows
+      // convert to domain Dokumen either way.
+      let response: ServerEnvelope | unknown[] | undefined;
+      try {
+        response = (await target.getAllData(token)) as ServerEnvelope | unknown[];
+      } catch {
+        // Transport failure: the vanilla app surfaces this exact message.
+        throw new AdapterError(CONNECTION_ERROR, false);
+      }
+      if (Array.isArray(response)) {
+        // The real server's bare rows array — pass it straight to the encoder.
+        return rawRowsToDokumen(response as never);
+      }
+      const envelope = response as ServerEnvelope;
+      if (envelope?.sessionExpired) {
+        hooks.onSessionExpired?.();
+      }
+      if (!envelope || !envelope.success) {
+        throw new AdapterError(
+          envelope?.message ?? "Terjadi kesalahan pada server.",
+          Boolean(envelope?.sessionExpired),
+        );
+      }
       return rawRowsToDokumen(envelope.data as never);
     },
     async saveDataWithFiles(token, input) {
