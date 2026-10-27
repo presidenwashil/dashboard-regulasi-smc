@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { Adapter } from "../adapter";
 import type { Sesi } from "../adapter/types";
-import type { Notify } from "../types";
+import type { Notify } from "../components/Shared";
 
 /**
  * Dev-only Admin/User role switcher — launches the app as a seeded user

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api } from '../api';
-import { Chip, ICON_BTN, Modal, Pagination } from '../components/Shared';
+import { useAdapter } from '../adapter/context';
+import { Chip, ICON_BTN, Modal, Pagination, type Notify } from '../components/Shared';
 import { ITEMS_PER_PAGE, isAktif, yearOf } from '../utils';
 import SosialisasiDetailPage from './SosialisasiDetailPage';
-import type { Doc, Notify, Session, SosSummary } from '../types';
+import type { Dokumen, Sesi, SosialisasiSummaryData } from '../adapter/types';
 
 type SortCol = 'judul' | 'jenis' | 'nomor' | 'status' | 'tahun';
 type FilterKey = 'tahun' | 'jenis' | 'pemilik' | 'unit';
@@ -21,34 +21,33 @@ const uniq = (arr: (string | number | null | undefined)[]): string[] =>
   [...new Set(arr.filter((x): x is string | number => x !== null && x !== undefined && x !== '').map(String))].sort();
 
 interface Props {
-  docs: Doc[];
-  session: Session;
+  docs: Dokumen[];
+  session: Sesi;
   notify: Notify;
-  onEdit: (d: Doc) => void;
+  onEdit: (d: Dokumen) => void;
 }
 
 export default function SosialisasiPage({ docs, session, notify, onEdit }: Props) {
+  const api = useAdapter();
   const { token } = session;
-  const isAdmin = session.role === 'Admin';
+  const isAdmin = session.user.role === 'Admin';
 
   const [readIds, setReadIds] = useState<number[]>([]);
-  const [summary, setSummary] = useState<SosSummary | null>(null);
+  const [summary, setSummary] = useState<SosialisasiSummaryData | null>(null);
   const [filter, setFilter] = useState<Filter>(EMPTY_FILTER);
   const [sort, setSort] = useState<{ col: SortCol | ''; asc: boolean }>({ col: '', asc: true });
   const [page, setPage] = useState(0);
-  const [confirmDoc, setConfirmDoc] = useState<Doc | null>(null);
+  const [confirmDoc, setConfirmDoc] = useState<Dokumen | null>(null);
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
   const [detailRow, setDetailRow] = useState<number | null>(null);
 
   const loadRead = useCallback(async () => {
-    const r = await api.getMyReadDocs(token);
-    if (r.success && r.data) setReadIds(r.data);
+    setReadIds(await api.getMyReadDocs(token));
     if (isAdmin) {
-      const s = await api.getSosSummary(token);
-      if (s.success) setSummary(s);
+      setSummary(await api.getSosialisasiSummary(token));
     }
-  }, [token, isAdmin]);
+  }, [api, token, isAdmin]);
 
   const updateFilter = (patch: Partial<Filter>) => {
     setFilter((f) => ({ ...f, ...patch }));
@@ -79,11 +78,11 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
     );
     if (!sort.col) return list;
 
-    const getters: Record<SortCol, (d: Doc) => string | number> = {
+    const getters: Record<SortCol, (d: Dokumen) => string | number> = {
       judul: (d) => d.judul.toLowerCase(),
       jenis: (d) => d.jenis.toLowerCase(),
       nomor: (d) => d.nomor.toLowerCase(),
-      status: (d) => d.status.toLowerCase(),
+      status: (d) => (d.statusDokumen ?? '').toLowerCase(),
       tahun: (d) => yearOf(d) ?? 0,
     };
     const key = getters[sort.col];
@@ -97,12 +96,12 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
 
   if (detailRow !== null) {
     return (
-      <SosialisasiDetailPage rowIndex={detailRow} token={token} notify={notify} onBack={() => setDetailRow(null)} />
+      <SosialisasiDetailPage docId={detailRow} token={token} notify={notify} onBack={() => setDetailRow(null)} />
     );
   }
 
   const aktifRows = rows.filter(isAktif);
-  const sudahCount = aktifRows.filter((d) => readIds.includes(d.rowIndex)).length;
+  const sudahCount = aktifRows.filter((d) => d.docId !== undefined && readIds.includes(d.docId)).length;
   const pageRows = rows.slice(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE);
 
   const toggleSort = (col: SortCol) => {
@@ -125,10 +124,11 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
     if (!confirmDoc) return;
     setBusy(true);
     try {
-      const r = await api.markRead(token, confirmDoc.rowIndex, confirmDoc.judul);
-      if (!r.success) throw new Error(r.message);
-      setReadIds((ids) => [...ids, confirmDoc.rowIndex]);
-      notify(r.message ?? 'Dokumen ditandai dibaca.');
+      const docId = confirmDoc.docId;
+      if (docId === undefined) throw new Error(`Dokumen "${confirmDoc.judul}" tidak memiliki ID baris.`);
+      const message = await api.markDocumentRead(token, docId, confirmDoc.judul);
+      setReadIds((ids) => [...ids, docId]);
+      notify(message || 'Dokumen ditandai dibaca.');
       setConfirmDoc(null);
     } catch (e) {
       notify((e as Error).message, true);
@@ -208,12 +208,12 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
               )}
               {pageRows.map((d) => {
                 const aktif = isAktif(d);
-                const sudah = readIds.includes(d.rowIndex);
-                const totalRead = Object.keys(summary?.readMap?.[d.rowIndex] ?? {}).length;
-                const st = d.status || '-';
+                const sudah = d.docId !== undefined && readIds.includes(d.docId);
+                const totalRead = d.docId === undefined ? 0 : Object.keys(summary?.readMap?.[d.docId] ?? {}).length;
+                const st = d.statusDokumen ?? '-';
                 const isBaru = st.toUpperCase() === 'BARU';
                 return (
-                  <tr key={d.rowIndex} className="hover:bg-gray-700/50 transition-colors group/row">
+                  <tr key={d.docId ?? d.judul} className="hover:bg-gray-700/50 transition-colors group/row">
                     <td className="p-4">
                       <div className="font-bold text-gray-200 line-clamp-2 max-w-xs">{d.judul}</div>
                       {aktif ? (
@@ -235,7 +235,7 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
                         isBaru ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50' : 'bg-amber-500/20 text-amber-400 border-amber-500/50'
                       }`}>
                         {st}
-                        {st.toUpperCase() === 'REVISI' && <span className="ml-1 text-[10px] bg-gray-700 px-1 rounded">V.{String(d.revisi)}</span>}
+                        {st.toUpperCase() === 'REVISI' && <span className="ml-1 text-[10px] bg-gray-700 px-1 rounded">V.{d.revisi ?? ''}</span>}
                       </span>
                     </td>
                     <td className="p-4 text-center text-gray-300 font-semibold text-sm">{yearOf(d) ?? '-'}</td>
@@ -249,7 +249,7 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
                     {isAdmin && (
                       <td className="p-4 text-center">
                         {aktif && summary ? (
-                          <button onClick={() => setDetailRow(d.rowIndex)} className="text-xs font-bold text-cyan-400 hover:underline whitespace-nowrap">
+                          <button onClick={() => d.docId !== undefined && setDetailRow(d.docId)} className="text-xs font-bold text-cyan-400 hover:underline whitespace-nowrap">
                             {totalRead} / {summary.totalUser} karyawan
                           </button>
                         ) : (

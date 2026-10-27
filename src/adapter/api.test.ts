@@ -103,6 +103,13 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     expect(calls).toContainEqual(["markDocumentRead", "tok-9", 7, "Pedoman Contoh"]);
   });
 
+  it("leaves an omitted read-confirmation message empty for the screen fallback", async () => {
+    const backend = {
+      markDocumentRead: () => ({ success: true }),
+    } as unknown as Backend;
+    await expect(createApi(backend).markDocumentRead("tok", 7, "SPO Ujian")).resolves.toBe("");
+  });
+
   it("logs out the whole Sesi while the token stays inside the seam", async () => {
     const calls: unknown[][] = [];
     const backend = new Proxy({} as Backend, {
@@ -191,7 +198,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
       {
         judul: "SPO Ujian", nomor: "SPO/RM/003", jenis: "SPO", pemilik: "Casemix", unit: "Data Entry",
         bidang: "-", status: "Baru", revisi: "-", tanggal: "2026-05-01",
-        akreditasi: "-", keterangan: "", statusBerlaku: "Aktif",
+        akreditasi: "-", keterangan: "-", statusBerlaku: "Aktif",
         existingPdfUrl: "https://docs.google.com/document/d/keep/view",
         existingWordUrl: "",
       },

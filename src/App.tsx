@@ -12,7 +12,6 @@ import DashboardPage from './pages/DashboardPage';
 import SosialisasiPage from './pages/SosialisasiPage';
 import FormPage from './pages/FormPage';
 import ApprovalPage from './pages/ApprovalPage';
-import type { Doc, Session } from './types';
 
 type TabId = 'dashboard' | 'sosialisasi' | 'form' | 'approval';
 
@@ -34,39 +33,11 @@ type AppProps = {
   createAdapter?: (hooks: ApiHooks) => Adapter;
 };
 
-function toLegacyDoc(doc: Dokumen): Doc {
-  if (doc.docId === undefined) throw new Error(`Dokumen "${doc.judul}" tidak memiliki ID baris.`);
-  return {
-    rowIndex: doc.docId,
-    ts: '',
-    judul: doc.judul,
-    nomor: doc.nomor,
-    jenis: doc.jenis,
-    pemilik: doc.pemilik,
-    unit: doc.unit,
-    bidang: doc.bidang.length ? doc.bidang.join(', ') : '-',
-    status: doc.statusDokumen ?? '',
-    revisi: doc.revisi ?? '',
-    tanggal: doc.tanggal ?? '',
-    pdfUrl: doc.pdfUrl ?? '',
-    wordUrl: doc.wordUrl ?? '',
-    akreditasi: doc.akreditasi.length ? doc.akreditasi.join(', ') : '-',
-    keterangan: doc.keterangan,
-    statusBerlaku: doc.statusBerlaku,
-  };
-}
-
-function toLegacySession(sesi: Sesi): Session {
-  const { role } = sesi.user;
-  if (role !== 'Admin' && role !== 'User') throw new Error(`Peran akun tidak dikenal: ${role}`);
-  return { ...sesi.user, role, token: sesi.token };
-}
-
 export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
   const [session, setSession] = useState<Sesi | null>(loadSesi);
   const [tab, setTab] = useState<TabId>('dashboard');
-  const [docs, setDocs] = useState<Doc[]>([]);
-  const [editing, setEditing] = useState<Doc | null>(null);
+  const [docs, setDocs] = useState<Dokumen[]>([]);
+  const [editing, setEditing] = useState<Dokumen | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const sessionExpiryHandled = useRef(false);
   const sessionExpiryMessageShown = useRef(false);
@@ -97,7 +68,10 @@ export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
   const reloadDocs = useCallback(async () => {
     if (!session) return;
     try {
-      setDocs((await appApi.getAllData(session.token)).map(toLegacyDoc));
+      const documents = await appApi.getAllData(session.token);
+      const missingId = documents.find((doc) => doc.docId === undefined);
+      if (missingId) throw new Error(`Dokumen "${missingId.judul}" tidak memiliki ID baris.`);
+      setDocs(documents);
     } catch (error) {
       if (error instanceof AdapterError && error.sessionExpired) {
         if (sessionExpiryMessageShown.current) return;
@@ -149,7 +123,8 @@ export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
     if (t !== 'form') setEditing(null);
     setTab(t);
   };
-  const goEdit = (doc: Doc) => {
+  const goEdit = (doc: Dokumen) => {
+    if (doc.docId === undefined) throw new Error(`Dokumen "${doc.judul}" tidak memiliki ID baris.`);
     setEditing(doc);
     setTab('form');
   };
@@ -210,11 +185,11 @@ export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
         <DashboardPage docs={docs} token={session.token} notify={notify} onGoSosialisasi={() => goTab('sosialisasi')} />
       )}
       {tab === 'sosialisasi' && (
-        <SosialisasiPage docs={docs} session={toLegacySession(session)} notify={notify} onEdit={goEdit} />
+        <SosialisasiPage docs={docs} session={session} notify={notify} onEdit={goEdit} />
       )}
       {tab === 'form' && (
         <FormPage
-          key={editing?.rowIndex ?? 'new'}
+          key={editing?.docId ?? 'new'}
           editing={editing}
           token={session.token}
           notify={notify}

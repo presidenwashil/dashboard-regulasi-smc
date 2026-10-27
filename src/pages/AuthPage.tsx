@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { LOGO_SMC } from '../utils';
 import type { Adapter } from '../adapter';
 import { useAdapter } from '../adapter/context';
-import type { Notify } from '../types';
+import type { Notify } from '../components/Shared';
 import type { Sesi } from '../adapter/types';
 
 const box = 'bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl p-6 sm:p-8';

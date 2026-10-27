@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api';
+import { useAdapter } from '../adapter/context';
 import { fmtWaktu } from '../utils';
-import type { Notify, SosDetail, SosPerson } from '../types';
+import type { SosialisasiDetailData, SosialisasiPerson } from '../adapter/types';
+import type { Notify } from '../components/Shared';
 
 interface Props {
-  rowIndex: number;
+  docId: number;
   token: string;
   notify: Notify;
   onBack: () => void;
@@ -12,25 +13,25 @@ interface Props {
 
 type Tab = 'sudah' | 'belum';
 
-export default function SosialisasiDetailPage({ rowIndex, token, notify, onBack }: Props) {
-  const [data, setData] = useState<SosDetail | null>(null);
+export default function SosialisasiDetailPage({ docId, token, notify, onBack }: Props) {
+  const api = useAdapter();
+  const [data, setData] = useState<SosialisasiDetailData | null>(null);
   const [tab, setTab] = useState<Tab>('sudah');
   const [pdfBusy, setPdfBusy] = useState(false);
 
   useEffect(() => {
-    api.getSosDetail(token, rowIndex)
-      .then((r) => (r.success && r.data ? setData(r.data) : notify(r.message ?? 'Gagal memuat detail.', true)))
+    api.getSosialisasiDetail(token, docId)
+      .then(setData)
       .catch((e: Error) => notify(e.message, true));
-  }, [token, rowIndex, notify]);
+  }, [api, token, docId, notify]);
 
   const downloadPdf = async () => {
     setPdfBusy(true);
     try {
-      const r = await api.genPdf(token, rowIndex);
-      if (!r.success) throw new Error(r.message);
-      const bytes = Uint8Array.from(atob(r.base64), (c) => c.charCodeAt(0));
+      const rekap = await api.generateSosialisasiPdf(token, docId);
+      const bytes = Uint8Array.from(atob(rekap.base64), (c) => c.charCodeAt(0));
       const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-      const a = Object.assign(document.createElement('a'), { href: url, download: r.filename });
+      const a = Object.assign(document.createElement('a'), { href: url, download: rekap.filename });
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -49,7 +50,7 @@ export default function SosialisasiDetailPage({ rowIndex, token, notify, onBack 
 
   const totalRead = data.sudah.length;
   const pct = data.totalUser > 0 ? Math.round((totalRead / data.totalUser) * 100) : 0;
-  const list: (SosPerson & { waktu?: number })[] = tab === 'sudah' ? data.sudah : data.belum;
+  const list: SosialisasiPerson[] = tab === 'sudah' ? data.sudah : data.belum;
 
   const tabCls = (active: boolean) =>
     `px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
