@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { LOGO_MUTU, LOGO_SMC } from './utils';
+import { LOGO_MUTU, LOGO_SMC, requireDocId } from './utils';
 import { Toast, type ToastState } from './components/Shared';
 import { createDefaultAppApi, isDevBackend } from './adapter/install';
 import { AdapterProvider } from './adapter/provider';
@@ -69,8 +69,7 @@ export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
     if (!session) return;
     try {
       const documents = await appApi.getAllData(session.token);
-      const missingId = documents.find((doc) => doc.docId === undefined);
-      if (missingId) throw new Error(`Dokumen "${missingId.judul}" tidak memiliki ID baris.`);
+      documents.forEach(requireDocId);
       setDocs(documents);
     } catch (error) {
       if (error instanceof AdapterError && error.sessionExpired) {
@@ -124,7 +123,7 @@ export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
     setTab(t);
   };
   const goEdit = (doc: Dokumen) => {
-    if (doc.docId === undefined) throw new Error(`Dokumen "${doc.judul}" tidak memiliki ID baris.`);
+    requireDocId(doc);
     setEditing(doc);
     setTab('form');
   };

@@ -39,13 +39,35 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     await expect(api.loginUser("1059", "pw")).rejects.toBeInstanceOf(AdapterError);
   });
 
-  it("invokes the session-expired hook and rejects when the envelope flags sessionExpired", async () => {
+  it("invokes the session-expired hook and rejects even when the envelope succeeds", async () => {
     const backend = {
-      getAllData: () => ({ success: false, message: "Sesi tidak valid.", sessionExpired: true }),
+      getAllData: () => ({ success: true, message: "Sesi tidak valid.", sessionExpired: true }),
     } as unknown as Backend;
     const onSessionExpired = vi.fn();
     const api = createApi(backend, { onSessionExpired });
-    await expect(api.getAllData("tok-expired")).rejects.toMatchObject({ sessionExpired: true });
+    await expect(api.getAllData("tok-expired")).rejects.toMatchObject({
+      message: "Sesi tidak valid.",
+      sessionExpired: true,
+    });
+    expect(onSessionExpired).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a successful session-expired envelope on ordinary Adapter calls", async () => {
+    const backend = {
+      loginUser: () => ({
+        success: true,
+        message: "Sesi tidak valid.",
+        sessionExpired: true,
+        token: "unexpected-token",
+        user: { nama: "Unexpected", nrp: "0000", role: "User" },
+      }),
+    } as unknown as Backend;
+    const onSessionExpired = vi.fn();
+    const api = createApi(backend, { onSessionExpired });
+    await expect(api.loginUser("0000", "pw")).rejects.toMatchObject({
+      message: "Sesi tidak valid.",
+      sessionExpired: true,
+    });
     expect(onSessionExpired).toHaveBeenCalledTimes(1);
   });
 

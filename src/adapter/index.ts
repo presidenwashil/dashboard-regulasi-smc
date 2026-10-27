@@ -111,8 +111,12 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
       // app surfaces this exact message.
       throw new AdapterError(CONNECTION_ERROR, false);
     }
-    if (envelope && envelope.sessionExpired) {
+    if (envelope?.sessionExpired) {
       hooks.onSessionExpired?.();
+      throw new AdapterError(
+        envelope.message ?? "Terjadi kesalahan pada server.",
+        true,
+      );
     }
     if (!envelope || !envelope.success) {
       throw new AdapterError(
@@ -164,6 +168,10 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
       const envelope = response as ServerEnvelope;
       if (envelope?.sessionExpired) {
         hooks.onSessionExpired?.();
+        throw new AdapterError(
+          envelope.message ?? "Terjadi kesalahan pada server.",
+          true,
+        );
       }
       if (!envelope || !envelope.success) {
         throw new AdapterError(

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { useAdapter } from '../adapter/context';
 import type { Dokumen, DokumenInput, FilePayload, StatusBerlaku } from '../adapter/types';
-import { AKREDITASI_OPTIONS, DATA_UNIT, JENIS_OPTIONS, PEMILIK_OPTIONS, fmtTanggalInput } from '../utils';
+import { AKREDITASI_OPTIONS, DATA_UNIT, JENIS_OPTIONS, PEMILIK_OPTIONS, fmtTanggalInput, requireDocId } from '../utils';
 import type { Notify } from '../components/Shared';
 
 const inp = 'w-full px-4 py-2.5 rounded-lg text-sm';
@@ -102,10 +102,6 @@ function toStatusBerlaku(value: string): StatusBerlaku {
   return 'Aktif';
 }
 
-function hasDocId(document: Dokumen): document is Dokumen & { docId: number } {
-  return document.docId !== undefined;
-}
-
 interface FormInnerProps extends FormProps {
   master: string[];
 }
@@ -151,11 +147,8 @@ function FormInner({ master, editing, token, notify, onSaved }: FormInnerProps) 
         akreditasi: f.akreditasi,
         keterangan: f.keterangan,
       };
-      if (editing && !hasDocId(editing)) {
-        throw new Error(`Dokumen "${editing.judul}" tidak memiliki ID baris.`);
-      }
       const message = editing
-        ? await api.updateDataWithFiles(token, payload, editing.docId, {
+        ? await api.updateDataWithFiles(token, payload, requireDocId(editing), {
             existingPdfUrl: editing.pdfUrl,
             existingWordUrl: editing.wordUrl,
           })

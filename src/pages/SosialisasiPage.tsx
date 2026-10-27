@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAdapter } from '../adapter/context';
 import { Chip, ICON_BTN, Modal, Pagination, type Notify } from '../components/Shared';
-import { ITEMS_PER_PAGE, isAktif, yearOf } from '../utils';
+import { ITEMS_PER_PAGE, isAktif, requireDocId, yearOf } from '../utils';
 import SosialisasiDetailPage from './SosialisasiDetailPage';
 import type { Dokumen, Sesi, SosialisasiSummaryData } from '../adapter/types';
 
@@ -124,8 +124,7 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
     if (!confirmDoc) return;
     setBusy(true);
     try {
-      const docId = confirmDoc.docId;
-      if (docId === undefined) throw new Error(`Dokumen "${confirmDoc.judul}" tidak memiliki ID baris.`);
+      const docId = requireDocId(confirmDoc);
       const message = await api.markDocumentRead(token, docId, confirmDoc.judul);
       setReadIds((ids) => [...ids, docId]);
       notify(message || 'Dokumen ditandai dibaca.');
@@ -210,8 +209,8 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
                 const aktif = isAktif(d);
                 const sudah = d.docId !== undefined && readIds.includes(d.docId);
                 const totalRead = d.docId === undefined ? 0 : Object.keys(summary?.readMap?.[d.docId] ?? {}).length;
-                const st = d.statusDokumen ?? '-';
-                const isBaru = st.toUpperCase() === 'BARU';
+                const statusDokumen = d.statusDokumen ?? '-';
+                const isBaru = statusDokumen.toUpperCase() === 'BARU';
                 return (
                   <tr key={d.docId ?? d.judul} className="hover:bg-gray-700/50 transition-colors group/row">
                     <td className="p-4">
@@ -234,8 +233,8 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold text-xs border ${
                         isBaru ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50' : 'bg-amber-500/20 text-amber-400 border-amber-500/50'
                       }`}>
-                        {st}
-                        {st.toUpperCase() === 'REVISI' && <span className="ml-1 text-[10px] bg-gray-700 px-1 rounded">V.{d.revisi ?? ''}</span>}
+                        {statusDokumen}
+                        {statusDokumen.toUpperCase() === 'REVISI' && <span className="ml-1 text-[10px] bg-gray-700 px-1 rounded">V.{d.revisi ?? ''}</span>}
                       </span>
                     </td>
                     <td className="p-4 text-center text-gray-300 font-semibold text-sm">{yearOf(d) ?? '-'}</td>

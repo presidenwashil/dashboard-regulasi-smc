@@ -29,6 +29,13 @@ export const DATA_UNIT: Record<string, readonly string[]> = {
 
 export const isAktif = (d: Dokumen): boolean => d.statusBerlaku === 'Aktif';
 
+export const requireDocId = (document: Dokumen): number => {
+  if (document.docId === undefined) {
+    throw new Error(`Dokumen "${document.judul}" tidak memiliki ID baris.`);
+  }
+  return document.docId;
+};
+
 export const yearOf = (d: Dokumen): number | null =>
   d.tanggal ? new Date(d.tanggal).getFullYear() : null;
 
