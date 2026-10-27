@@ -30,8 +30,18 @@ One seam between client and server: the **typed API adapter**
 (`src/adapter/`, ADR-0002). UI code only sees domain objects (`Dokumen`,
 `Sesi`, …) and public `'id'`-stable docId identities; legacy spreadsheet shapes
 never leave the adapter. Session expiry is centralized: the adapter raises the
-logout hook the app shell subscribes to.
+logout hook, and the app shell responds by clearing the active and persisted
+Sesi.
 
-The mock backend (`src/adapter/mock/`) faithfully mirrors `Code.js` contracts,
-including role gates and duplicate-sosialisasi collapse; its fidelity is pinned
-by tests.
+Sesi persistence lives in `src/sesi/sesi.ts`: the app restores a validated Sesi
+from browser `sessionStorage` on load, saves it after login, and clears it on
+logout or session expiry. Loading or clearing also removes the legacy
+`sessionData` entry.
+
+`src/adapter/install.ts` selects the backend: Vite development uses the
+behavior-faithful mock (`src/adapter/mock/`), while the production build uses
+`google.script.run` inside Apps Script. In development, the role switcher
+obtains seeded Admin/User sesi through the mock adapter's dev-only
+`createDevSesi`; the production adapter has no such capability, so the switcher
+does not render. Mock fidelity to `Code.js`, including role gates and
+duplicate-sosialisasi collapse, is pinned by tests.
