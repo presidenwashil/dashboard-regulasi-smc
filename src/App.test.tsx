@@ -12,6 +12,7 @@ vi.mock("./pages/DashboardPage", () => ({ default: () => <div>Dashboard slice</d
 vi.mock("./pages/SosialisasiPage", () => ({ default: () => <div>Sosialisasi slice</div> }));
 vi.mock("./pages/FormPage", () => ({ default: () => <div>Form slice</div> }));
 vi.mock("./pages/ApprovalPage", () => ({ default: () => <div>Approval slice</div> }));
+vi.mock("./pages/UserSosialisasiProgressPage", () => ({ default: () => <div>User progress slice</div> }));
 
 const storedSesi: Sesi = {
   user: { nama: "Admin Utama", profesi: "Administrator", bidang: "IT", unit: "IT", nrp: "admin01", role: "Admin" },
@@ -27,6 +28,25 @@ beforeEach(() => {
 });
 
 describe("App adapter and Sesi lifecycle", () => {
+  it("shows the User progress view to Admin but not to a User", async () => {
+    const user = userEvent.setup();
+    const backend = createMockBackend();
+    const adminApi = createApi(backend);
+    saveSesi(await adminApi.loginUser("admin01", "demo-ganti-saya"));
+    const createAdapter = (hooks: ApiHooks) => createApi(backend, hooks);
+    const { unmount } = render(<App createAdapter={createAdapter} />);
+    expect(await screen.findByRole("button", { name: /Progress Sosialisasi User/ })).toBeInTheDocument();
+
+    unmount();
+    clearSesi();
+    render(<App createAdapter={adapterFromMock} />);
+    await user.type(screen.getByLabelText("NRP"), "0042");
+    await user.type(screen.getByLabelText("Password"), "demo-farah");
+    await user.click(screen.getByRole("button", { name: "Masuk" }));
+    await screen.findByRole("button", { name: /Sosialisasi Dokumen/ });
+    expect(screen.queryByRole("button", { name: /Progress Sosialisasi User/ })).not.toBeInTheDocument();
+  });
+
   it("persists the Sesi returned by the injected mock adapter after login", async () => {
     const user = userEvent.setup();
     render(<App createAdapter={adapterFromMock} />);

@@ -7,7 +7,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { createMockBackend } from "./backend";
-import { defaultMockSeed, T_BUDI_READ_1 } from "./seed";
+import { defaultMockSeed, T_BUDI_READ_1, T_FARAH_READ_1 } from "./seed";
 import type { MockSeed } from "./seed";
 import { createApi } from "../index";
 
@@ -277,31 +277,29 @@ describe("mock fidelity: sosialisasi read map (gas/Sosialisasi.gs)", () => {
     await expect(api.getMyReadDocs(sesi)).resolves.toEqual([3, 3, 2]);
   });
 
-  it("pins the summary read map: approvedUsers stays approval-filtered, the map walks the sheet unfiltered", async () => {
+  it("keeps the first confirmed time while filtering the summary user list to Approved accounts", async () => {
     const sesi = await admin();
     const summary = await api.getSosialisasiSummary(sesi);
     // 3 approved users (Admin Utama, Budi, Farah) exactly like the users sheet.
     expect(summary.totalUser).toBe(3);
     expect(summary.approvedUsers.map((u) => u.nrp).sort()).toEqual(["0042", "0987", "admin01"]);
-    // Farah read twice (seeded duplicate pair); the real read map
-    // overwrites with the record in the LAST sheet row, so her second read wins —
-    // not the first one. Budi has the single read time.
-    expect(summary.readMap[3]["0042"]).toBe(T_BUDI_READ_1 + 1000);
+    // Farah has a legacy duplicate; the first explicit confirmation is canonical.
+    expect(summary.readMap[3]["0042"]).toBe(T_FARAH_READ_1);
     expect(summary.readMap[3]["0987"]).toBe(T_BUDI_READ_1);
   });
 
-  it("keeps records of users who are no longer Approved in the read map, last record winning", async () => {
+  it("keeps records of users who are no longer Approved in the read map, first record winning", async () => {
     // The real getSosialisasiSummary loops the Sosialisasi sheet
     // unfiltered: an NRP whose account got deactivated after reading still
     // appears in the map (and never in approvedUsers).
     const rudiRead = T_BUDI_READ_1 + 2000;
-    const rudiReadTwice = T_BUDI_READ_1 + 3000;
+    const rudiReadLater = T_BUDI_READ_1 + 3000;
     const seeded: MockSeed = {
       ...defaultMockSeed(),
       sosialisasi: [
         ...defaultMockSeed().sosialisasi,
         { waktu: rudiRead, nrp: "2222", nama: "Rudi", docRowIndex: 5, judul: "SK Direktur Kebijakan Casemix" },
-        { waktu: rudiReadTwice, nrp: "2222", nama: "Rudi", docRowIndex: 5, judul: "SK Direktur Kebijakan Casemix" },
+        { waktu: rudiReadLater, nrp: "2222", nama: "Rudi", docRowIndex: 5, judul: "SK Direktur Kebijakan Casemix" },
       ],
     };
     const rudiBackend = createMockBackend(seeded);
@@ -309,18 +307,16 @@ describe("mock fidelity: sosialisasi read map (gas/Sosialisasi.gs)", () => {
     const sesi = await rudiApi.loginUser("admin01", "demo-ganti-saya");
     const summary = await rudiApi.getSosialisasiSummary(sesi);
     expect(summary.approvedUsers.map((u) => u.nrp)).not.toContain("2222"); // Rejected account
-    expect(summary.readMap[5]).toMatchObject({ "2222": rudiReadTwice });
+    expect(summary.readMap[5]).toMatchObject({ "2222": rudiRead });
   });
 
-  it("keeps the last read time per user in the detail view and sorts sudah by waktu desc", async () => {
+  it("keeps the first confirmed time per user in the detail view and sorts sudah by waktu desc", async () => {
     const sesi = await admin();
     const detail = await api.getSosialisasiDetail(sesi, 3);
     expect(detail).toMatchObject({ judul: "Pedoman Penanganan Risiko Rumah Zakat", totalUser: 3 });
-    // Farah's LAST record is later than Budi's only read, so the real
-    // last-write-in-sheet-order map puts her first (waktu = T_BUDI_READ_1 + 1000).
-    expect(detail.sudah.map((u) => u.nrp)).toEqual(["0042", "0987"]);
-    expect(detail.sudah[0]).toMatchObject({ waktu: T_BUDI_READ_1 + 1000, nrp: "0042" });
-    expect(detail.sudah[1]).toMatchObject({ waktu: T_BUDI_READ_1, nrp: "0987" });
+    expect(detail.sudah.map((u) => u.nrp)).toEqual(["0987", "0042"]);
+    expect(detail.sudah[0]).toMatchObject({ waktu: T_BUDI_READ_1, nrp: "0987" });
+    expect(detail.sudah[1]).toMatchObject({ waktu: T_FARAH_READ_1, nrp: "0042" });
     expect(detail.belum.map((u) => u.nrp).sort()).toEqual(["admin01"]);
     for (const person of detail.belum) {
       expect(person).not.toHaveProperty("waktu");

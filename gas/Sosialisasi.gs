@@ -64,7 +64,9 @@ function getSosialisasiSummary(token) {
       var docIdx = Number(sosRows[j][3]);
       var ts = sosRows[j][0];
       if (!readMap[docIdx]) readMap[docIdx] = {};
-      readMap[docIdx][sosRows[j][1]] = (ts instanceof Date) ? ts.getTime() : ts;
+      if (!Object.prototype.hasOwnProperty.call(readMap[docIdx], sosRows[j][1])) {
+        readMap[docIdx][sosRows[j][1]] = (ts instanceof Date) ? ts.getTime() : ts;
+      }
     }
 
     return { success: true, totalUser: approvedUsers.length, approvedUsers: approvedUsers, readMap: readMap };
@@ -89,13 +91,15 @@ function buildSosialisasiDetail_(docRowIndex) {
   for (var j = 1; j < sosRows.length; j++) {
     if (Number(sosRows[j][3]) === Number(docRowIndex)) {
       var ts = sosRows[j][0];
-      readMap[sosRows[j][1]] = (ts instanceof Date) ? ts.getTime() : ts;
+      if (!Object.prototype.hasOwnProperty.call(readMap, sosRows[j][1])) {
+        readMap[sosRows[j][1]] = (ts instanceof Date) ? ts.getTime() : ts;
+      }
     }
   }
 
   var sudah = [], belum = [];
   approvedUsers.forEach(function (u) {
-    if (readMap[u.nrp]) {
+    if (Object.prototype.hasOwnProperty.call(readMap, u.nrp)) {
       sudah.push({ nama: u.nama, nrp: u.nrp, bidang: u.bidang, unit: u.unit, waktu: readMap[u.nrp] });
     } else {
       belum.push({ nama: u.nama, nrp: u.nrp, bidang: u.bidang, unit: u.unit });
