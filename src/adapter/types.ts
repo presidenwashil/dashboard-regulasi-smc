@@ -129,6 +129,9 @@ export type RegistrasiInput = {
   password: string;
 };
 
+/** Self-service profile fields; identity and access status stay server-owned. */
+export type ProfileInput = Pick<User, "nama" | "profesi" | "bidang" | "unit">;
+
 /** File payload: read client-side to base64 (existing upload contract). */
 export type FilePayload = { name: string; mimeType: string; data: string };
 

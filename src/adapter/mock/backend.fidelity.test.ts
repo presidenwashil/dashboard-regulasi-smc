@@ -73,6 +73,51 @@ describe("mock fidelity: login and account lifecycle", () => {
     await expect(api.getMasterBidang()).resolves.toContain("Komite Mutu");
     await expect(api.getMasterBidang()).resolves.toHaveLength(14);
   });
+
+  it("lets a User update only their own profile while keeping their Sesi valid", async () => {
+    const farahSesi = await farah();
+    const otherSesi = await api.loginUser("0987", "demo-budi");
+
+    await expect(api.updateMyProfile(farahSesi, {
+      nama: "Farah Baru",
+      profesi: "Dokter Spesialis",
+      bidang: "Yanmed",
+      unit: "Poli",
+      nrp: "0987",
+    } as never)).resolves.toMatchObject({
+      nama: "Farah Baru",
+      profesi: "Dokter Spesialis",
+      bidang: "Yanmed",
+      unit: "Poli",
+      nrp: "0042",
+    });
+
+    await expect(api.getMyReadDocs(farahSesi)).resolves.toEqual([3, 3]);
+    await expect(api.updateMyProfile(otherSesi, {
+      nama: "Budi",
+      profesi: "Perawat",
+      bidang: "SDM",
+      unit: "IGD",
+    })).resolves.toMatchObject({ nrp: "0987", nama: "Budi" });
+    await expect(api.getAllUsers(await admin())).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ nrp: "0042", nama: "Farah Baru", status: "Approved" }),
+        expect.objectContaining({ nrp: "0987", nama: "Budi", status: "Approved" }),
+      ]),
+    );
+  });
+
+  it("changes a User password without old password, retaining this Sesi and revoking other Sesi", async () => {
+    const currentSesi = await farah();
+    const otherSesi = await farah();
+
+    await expect(api.changeMyPassword(currentSesi, "password-baru")).resolves.toContain("berhasil");
+    await expect(api.getMyReadDocs(currentSesi)).resolves.toEqual([3, 3]);
+    await expect(api.getMyReadDocs(otherSesi)).rejects.toMatchObject({ sessionExpired: true });
+    await expect(api.loginUser("0042", "password-baru")).resolves.toMatchObject({ user: { nrp: "0042" } });
+    await expect(api.loginUser("0042", "demo-farah")).rejects.toThrow("NRP atau password salah.");
+    await expect(api.changeMyPassword(currentSesi, "12345")).rejects.toThrow("Password baru minimal 6 karakter.");
+  });
 });
 
 describe("mock fidelity: role gates and session handling", () => {

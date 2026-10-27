@@ -44,6 +44,66 @@ describe("App adapter and Sesi lifecycle", () => {
     });
   });
 
+  it("allows a User to update their account and change password without ending the active Sesi", async () => {
+    const user = userEvent.setup();
+    render(<App createAdapter={adapterFromMock} />);
+
+    await user.type(screen.getByLabelText("NRP"), "0042");
+    await user.type(screen.getByLabelText("Password"), "demo-farah");
+    await user.click(screen.getByRole("button", { name: "Masuk" }));
+    await screen.findByText("Dashboard Analitik");
+    await user.click(screen.getByRole("button", { name: "Akun" }));
+
+    expect(await screen.findByRole("heading", { name: "Akun Saya" })).toBeInTheDocument();
+    expect(screen.getByLabelText("NRP")).toHaveValue("0042");
+    expect(screen.getByLabelText("NRP")).toBeDisabled();
+    expect(screen.getByText("Approved")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Nama"));
+    await user.type(screen.getByLabelText("Nama"), "Farah Terkini");
+    await user.clear(screen.getByLabelText("Profesi"));
+    await user.type(screen.getByLabelText("Profesi"), "Dokter Spesialis");
+    await user.selectOptions(screen.getByLabelText("Bidang"), "Komite Mutu");
+    await user.clear(screen.getByLabelText("Unit"));
+    await user.type(screen.getByLabelText("Unit"), "Poli");
+    await user.click(screen.getByRole("button", { name: "Simpan Profil" }));
+    expect(await screen.findByText("Profil berhasil diperbarui.")).toBeInTheDocument();
+    expect(screen.getByText("Farah Terkini")).toBeInTheDocument();
+    expect(JSON.parse(sessionStorage.getItem("dashboard-regulasi-sesi") ?? "null")).toMatchObject({
+      user: {
+        nama: "Farah Terkini",
+        profesi: "Dokter Spesialis",
+        bidang: "Komite Mutu",
+        unit: "Poli",
+        nrp: "0042",
+      },
+    });
+
+    await user.type(screen.getByLabelText("Password Baru"), "rahasia-baru");
+    await user.type(screen.getByLabelText("Konfirmasi Password Baru"), "beda-password");
+    await user.click(screen.getByRole("button", { name: "Ubah Password" }));
+    expect(await screen.findByText("Password baru dan konfirmasi tidak sama.")).toBeInTheDocument();
+    expect(screen.getByText("Akun Saya")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Password Baru"));
+    await user.type(screen.getByLabelText("Password Baru"), "short");
+    await user.clear(screen.getByLabelText("Konfirmasi Password Baru"));
+    await user.type(screen.getByLabelText("Konfirmasi Password Baru"), "short");
+    await user.click(screen.getByRole("button", { name: "Ubah Password" }));
+    expect(await screen.findByText("Password baru minimal 6 karakter.")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Password Baru"));
+    await user.type(screen.getByLabelText("Password Baru"), "rahasia-baru");
+    await user.clear(screen.getByLabelText("Konfirmasi Password Baru"));
+    await user.type(screen.getByLabelText("Konfirmasi Password Baru"), "rahasia-baru");
+    await user.click(screen.getByRole("button", { name: "Ubah Password" }));
+    expect(await screen.findByText("Password berhasil diubah.")).toBeInTheDocument();
+    expect(screen.getByText("Farah Terkini")).toBeInTheDocument();
+    expect(JSON.parse(sessionStorage.getItem("dashboard-regulasi-sesi") ?? "null")).toMatchObject({
+      user: { nrp: "0042" },
+    });
+  });
+
   it("clears an expired Sesi and returns to login with the server message once", async () => {
     saveSesi(storedSesi);
     const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");

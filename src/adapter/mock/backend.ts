@@ -113,6 +113,46 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
       return { success: true };
     },
 
+    updateMyProfile(token: string, profile: Record<string, unknown>) {
+      const user = sessionUser(token);
+      if (!user) return SESSION_REQUIRED();
+      const target = seed.users.find((row) => normNrp(row.nrp) === normNrp(user.nrp));
+      if (!target) return { success: false, message: "User tidak ditemukan." };
+
+      const updatedUser: User = {
+        ...user,
+        nama: String(profile.nama ?? "").trim(),
+        profesi: String(profile.profesi ?? "").trim(),
+        bidang: String(profile.bidang ?? "").trim(),
+        unit: String(profile.unit ?? "").trim(),
+      };
+      target.nama = updatedUser.nama;
+      target.profesi = updatedUser.profesi;
+      target.bidang = updatedUser.bidang;
+      target.unit = updatedUser.unit;
+      sessions.set(String(token), updatedUser);
+      return { success: true, user: updatedUser };
+    },
+
+    changeMyPassword(token: string, newPassword: string) {
+      const user = sessionUser(token);
+      if (!user) return SESSION_REQUIRED();
+      const password = String(newPassword ?? "");
+      if (password.length < 6) {
+        return { success: false, message: "Password baru minimal 6 karakter." };
+      }
+      const target = seed.users.find((row) => normNrp(row.nrp) === normNrp(user.nrp));
+      if (!target) return { success: false, message: "User tidak ditemukan." };
+
+      target.password = password;
+      for (const [otherToken, otherUser] of sessions) {
+        if (normNrp(otherUser.nrp) === normNrp(user.nrp) && otherToken !== String(token)) {
+          sessions.delete(otherToken);
+        }
+      }
+      return { success: true, message: "Password berhasil diubah." };
+    },
+
     /* ==================== MASTER BIDANG ==================== */
 
     getMasterBidang() {

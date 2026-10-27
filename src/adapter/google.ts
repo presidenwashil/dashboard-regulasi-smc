@@ -33,6 +33,8 @@ export function createGoogleBackend(runnerFactory: () => GoogleScriptRunner) {
   return {
     loginUser: (nrp: string, password: string) => callServer("loginUser", nrp, password),
     registerUser: (data: unknown) => callServer("registerUser", data),
+    updateMyProfile: (token: string, profile: unknown) => callServer("updateMyProfile", token, profile),
+    changeMyPassword: (token: string, newPassword: string) => callServer("changeMyPassword", token, newPassword),
     logoutSession: (token: string) => callServer("logoutSession", token),
     getMasterBidang: () => callServer("getMasterBidang"),
     getAllData: (token: string) => callServer("getAllData", token),
