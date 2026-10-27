@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Adapter } from "../adapter";
 import type { Sesi } from "../adapter/types";
+import type { Notify } from "../types";
 
 /**
  * Dev-only Admin/User role switcher — launches the app as a seeded user
@@ -9,11 +10,24 @@ import type { Sesi } from "../adapter/types";
  * consistent with the backend under test. Renders nothing when the adapter
  * has no dev sesi (the production/release build).
  */
-export function RoleSwitcher({ api, onSesi }: { api: Adapter; onSesi: (sesi: Sesi) => void }): ReactNode {
-  if (!api.createDevSesi) return null;
+export function RoleSwitcher({
+  api,
+  onSesi,
+  notify,
+}: {
+  api: Adapter;
+  onSesi: (sesi: Sesi) => void;
+  notify: Notify;
+}): ReactNode {
+  const createDevSesi = api.createDevSesi;
+  if (!createDevSesi) return null;
 
-  function switchTo(nrp: string): void {
-    void api.createDevSesi!(nrp).then(onSesi);
+  async function switchTo(nrp: string): Promise<void> {
+    try {
+      onSesi(await createDevSesi!(nrp));
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error), true);
+    }
   }
 
   return (

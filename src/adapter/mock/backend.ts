@@ -140,27 +140,30 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
       const user = sessionUser(token);
       if (!user) return SESSION_REQUIRED();
       const myNrp = normNrp(user.nrp);
-      const readDocs: number[] = [];
-      for (const record of seed.sosialisasi) {
-        if (normNrp(record.nrp) !== myNrp) continue;
-        const index = Number(record.docRowIndex);
-        if (!readDocs.includes(index)) readDocs.push(index);
-      }
-      return { success: true, data: readDocs };
+      // The real getMyReadDocs pushes one entry per matching sheet row —
+      // duplicates are rare only because of markDocumentRead's insert guard,
+      // so the mock preserves them instead of deduping.
+      return {
+        success: true,
+        data: seed.sosialisasi
+          .filter((r) => normNrp(r.nrp) === myNrp)
+          .map((r) => Number(r.docRowIndex)),
+      };
     },
 
     getSosialisasiSummary(token: string) {
       const access = requireAdmin(token);
       if (!access.user) return access.response;
       const approved = seed.users.filter((u) => u.status === "Approved");
-      const approvedNrps = new Set(approved.map((u) => normNrp(u.nrp)));
+      // approvedUsers is the only approval-filtered part: the real
+      // getSosialisasiSummary walks the users sheet for it, but its read map
+      // loops the Sosialisasi sheet unfiltered, each row overwriting its
+      // (doc, NRP) entry — the LAST record in sheet order wins.
       const readMap: Record<string, Record<string, number>> = {};
       for (const record of seed.sosialisasi) {
-        const nrp = normNrp(record.nrp);
-        if (!approvedNrps.has(nrp)) continue;
         const docKey = String(Number(record.docRowIndex));
         readMap[docKey] = readMap[docKey] ?? {};
-        if (readMap[docKey][nrp] === undefined) readMap[docKey][nrp] = record.waktu;
+        readMap[docKey][normNrp(record.nrp)] = record.waktu;
       }
       return {
         success: true,
@@ -181,18 +184,18 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
       const approved = seed.users
         .filter((u) => u.status === "Approved")
         .map((u) => ({ nama: u.nama, nrp: normNrp(u.nrp), bidang: u.bidang, unit: u.unit || "-" }));
-      const firstRead = new Map<string, number>();
+      // Same last-record-wins overwrite as the real buildSosialisasiDetail_:
+      // every matching sheet row sets (and may replace) the user's time.
+      const lastRead = new Map<string, number>();
       for (const record of seed.sosialisasi) {
         if (Number(record.docRowIndex) !== docIndex) continue;
-        const nrp = normNrp(record.nrp);
-        if (firstRead.has(nrp)) continue; // first record wins
-        firstRead.set(nrp, record.waktu);
+        lastRead.set(normNrp(record.nrp), record.waktu);
       }
       const sudah = approved
-        .filter((u) => firstRead.has(u.nrp))
-        .map((u) => ({ ...u, waktu: firstRead.get(u.nrp)! }))
+        .filter((u) => lastRead.has(u.nrp))
+        .map((u) => ({ ...u, waktu: lastRead.get(u.nrp)! }))
         .sort((a, b) => b.waktu - a.waktu);
-      const belum = approved.filter((u) => !firstRead.has(u.nrp));
+      const belum = approved.filter((u) => !lastRead.has(u.nrp));
       return {
         success: true,
         data: {
@@ -331,8 +334,14 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
       return { success: true, message: "Data berhasil diperbarui!" };
     },
 
-    getAllData() {
-      return { success: true, data: docRawRows() };
+    // Real Documents.gs getAllData contract: the Sesi credential is required —
+    // the real function THROWS on an invalid Sesi (no error envelope) — and the
+    // answer is a bare rows array, newest sheet row first.
+    getAllData(token: unknown) {
+      if (!sessionUser(token)) {
+        throw new Error("Sesi tidak valid, silakan login ulang.");
+      }
+      return docRawRows();
     },
 
     /* ==================== DEV-ONLY ==================== */

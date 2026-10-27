@@ -38,13 +38,14 @@ export const DEMO_MASTER_BIDANG = [
   "Komite Mutu", "Komite Medik", "Komite Keperawatan", "Komite PPI", "Komite K3RS", "SPI",
 ] as const;
 
-// Fixed demo timestamps (disposable; nothing is production data).
-const T_DOC_SPO = Date.UTC(2024, 10, 16);
+// Fixed demo timestamps (disposable; nothing is production data). Exported so
+// fidelity tests can pin exact values against seed-owned fixtures.
+export const T_DOC_SPO = Date.UTC(2024, 10, 16);
 const T_DOC_PEDOMAN = Date.UTC(2024, 8, 9);
 const T_DOC_PANDUAN = Date.UTC(2025, 2, 21);
 const T_DOC_SK = Date.UTC(2025, 6, 2);
-const T_FARAH_READ_1 = Date.UTC(2025, 3, 2, 9, 12);
-const T_BUDI_READ_1 = Date.UTC(2025, 3, 15, 14, 40);
+export const T_FARAH_READ_1 = Date.UTC(2025, 3, 2, 9, 12);
+export const T_BUDI_READ_1 = Date.UTC(2025, 3, 15, 14, 40);
 
 export function defaultMockSeed(): MockSeed {
   const users: MockUserRow[] = [
@@ -73,8 +74,11 @@ export function defaultMockSeed(): MockSeed {
       "-", "Baru", "", T_DOC_SK, "", "", "-", "", "Dicabut"],
   ];
 
-  // Sosialisasi sheet records in append order; the FIRST record for a (nrp, doc)
-  // pair wins, mirroring server collapse.
+  // Sosialisasi sheet records in append order, including a historical
+  // duplicate pair for one (nrp, doc). The real read map keeps the LAST
+  // record per NRP in sheet order (markDocumentRead's per-NRP insert guard
+  // keeps such duplicates rare); the mock mirrors that instead of inventing a
+  // first-read-wins rule the server doesn't have.
   const sosialisasi: SosialisasiRecord[] = [
     { waktu: T_FARAH_READ_1, nrp: "0042", nama: "Dr. Farah", docRowIndex: 3, judul: "Pedoman Penanganan Risiko Rumah Zakat" },
     { waktu: T_BUDI_READ_1, nrp: "0987", nama: "Budi", docRowIndex: 3, judul: "Pedoman Penanganan Risiko Rumah Zakat" },

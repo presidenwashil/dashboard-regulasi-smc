@@ -2,10 +2,13 @@
  * Mock fidelity (spec Testing Decisions): the mock backend must answer with
  * the same contracts the real Apps Script server does, so components tested
  * against the mock cannot rely on anything the server wouldn't do.
- * Every expectation mirrors Code.js behavior.
+ * Every expectation mirrors the vendored gas/*.gs sources (ADR-0001): the
+ * server is the contract truth; the mock adapts to it, never the reverse.
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { createMockBackend } from "./backend";
+import { defaultMockSeed, T_BUDI_READ_1 } from "./seed";
+import type { MockSeed } from "./seed";
 import { createApi } from "../index";
 
 let backend: ReturnType<typeof createMockBackend>;
@@ -127,18 +130,43 @@ describe("mock fidelity: role gates and session handling", () => {
   });
 });
 
-describe("mock fidelity: documents", () => {
-  it("returns documents newest-first with raw array rows carrying the appended sheet row index", async () => {
-    const raw = (backend.getAllData() as { data: unknown[][] }).data;
-    expect(raw).toHaveLength(4);
-    // Seed sheet order is rows 2..5; the response is reversed and the index appended.
-    expect(raw[0][1]).toBe("SK Direktur Kebijakan Casemix");
-    expect(raw[3][1]).toBe("SPO Data Entry Data Casemix");
-    expect(raw.map((r) => r[15])).toEqual([5, 4, 3, 2]);
+describe("mock fidelity: getAllData server contract (gas/Documents.gs)", () => {
+  it("requires the Sesi credential and throws like the real server on a missing or unknown one", () => {
+    expect(() => backend.getAllData("")).toThrow("Sesi tidak valid, silakan login ulang.");
+    expect(() => backend.getAllData("token-palsu")).toThrow("Sesi tidak valid, silakan login ulang.");
   });
 
+  it("answers a valid Sesi with a bare rows array (no envelope), newest sheet row first", async () => {
+    const sesi = await farah();
+    const raw = backend.getAllData(sesi.token) as unknown[][];
+    // The real getAllData returns `rows` directly — an envelope in the mock
+    // would be a contract the production client cannot rely on.
+    expect(raw).toHaveLength(4);
+    // Seed sheet order is rows 2..5; the response is reversed and the
+    // appended sheet row index (column 16) rides along.
+    expect(raw.map((r) => r[15])).toEqual([5, 4, 3, 2]);
+    expect(raw[0][1]).toBe("SK Direktur Kebijakan Casemix");
+    expect(raw[3][1]).toBe("SPO Data Entry Data Casemix");
+  });
+
+  it("normalizes the mock's bare array at the adapter: token in, Dokumen out", async () => {
+    const sesi = await farah();
+    const docs = await api.getAllData(sesi.token);
+    expect(docs).toHaveLength(4);
+    expect(docs[0]).toMatchObject({ judul: "SK Direktur Kebijakan Casemix", docId: 5 });
+  });
+
+  it("surfaces the real server's invalid-Sesi throw as the observed transport failure", async () => {
+    // In production the throw reaches the adapter through the failure handler,
+    // which rejects with the app's vanilla connection error.
+    await expect(api.getAllData("token-palsu")).rejects.toThrow("Koneksi error, coba lagi.");
+  });
+});
+
+describe("mock fidelity: documents", () => {
   it("pins all seeded document states: Baru/Revisi, Aktif/Non-Aktif/Dicabut, with/without files", async () => {
-    const docs = await api.getAllData();
+    const sesi = await farah();
+    const docs = await api.getAllData(sesi.token);
     const byJudul = Object.fromEntries(docs.map((d) => [d.judul, d]));
     expect(byJudul["SPO Data Entry Data Casemix"]).toMatchObject({ statusDokumen: "Baru", statusBerlaku: "Aktif", pdfUrl: null, wordUrl: null });
     expect(byJudul["Pedoman Penanganan Risiko Rumah Zakat"]).toMatchObject({ statusDokumen: "Revisi", revisi: "2", statusBerlaku: "Aktif", akreditasi: ["TKRS", "PMKP"], bidang: ["Umum", "Komite Mutu"] , wordUrl: expect.any(String), pdfUrl: expect.any(String)});
@@ -159,14 +187,14 @@ describe("mock fidelity: documents", () => {
       pdfFile: { name: "spo.pdf", mimeType: "application/pdf", data: "Zm9v" },
       wordFile: null,
     });
-    const docs = await api.getAllData();
+    const docs = await api.getAllData(sesi.token);
     expect(docs[0]).toMatchObject({ judul: "SPO Compliance Baru", statusBerlaku: "Aktif", docId: 6, pdfUrl: null });
     expect(docs).toHaveLength(5);
   });
 
   it("updates a document row keeping its row identity and existing links when files are omitted", async () => {
     const sesi = await admin();
-    const docs = await api.getAllData();
+    const docs = await api.getAllData(sesi.token);
     const doc = docs.find((d) => d.judul === "SPO Data Entry Data Casemix")!;
     await expect(
       api.updateDataWithFiles(
@@ -176,7 +204,7 @@ describe("mock fidelity: documents", () => {
         { existingPdfUrl: null, existingWordUrl: null },
       ),
     ).resolves.toContain("Data berhasil diperbarui");
-    const docsAfter = await api.getAllData();
+    const docsAfter = await api.getAllData(sesi.token);
     expect(docsAfter.find((d) => d.docId === doc.docId)).toMatchObject({
       judul: "SPO Data Entry Data Casemix (revisi naskah)",
       docId: doc.docId, // identity unchanged
@@ -184,8 +212,8 @@ describe("mock fidelity: documents", () => {
   });
 });
 
-describe("mock fidelity: sosialisasi", () => {
-  it("records a user's first read, answers success on duplicates, collapsing to one record", async () => {
+describe("mock fidelity: sosialisasi read map (gas/Sosialisasi.gs)", () => {
+  it("records a read with the per-NRP insert guard: a duplicate answers success, never a second insert", async () => {
     const sesi = await farah();
     await expect(api.markDocumentRead(sesi.token, 2, "SPO Data Entry Data Casemix")).resolves.toBe(
       "Dokumen ditandai sudah dibaca.",
@@ -194,25 +222,55 @@ describe("mock fidelity: sosialisasi", () => {
     await expect(api.markDocumentRead(sesi.token, 2, "SPO Data Entry Data Casemix")).resolves.toBe(
       "Dokumen sudah ditandai dibaca sebelumnya.",
     );
-    await expect(api.getMyReadDocs(sesi.token)).resolves.toEqual([3, 2]);
+    // The real getMyReadDocs pushes every sheet row for the caller — duplicates
+    // are rare only because of the per-NRP insert guard, not by dedupe.
+    await expect(api.getMyReadDocs(sesi.token)).resolves.toEqual([3, 3, 2]);
   });
 
-  it("tracks per-document progress over approved users only, keeping the first read time", async () => {
+  it("pins the summary read map: approvedUsers stays approval-filtered, the map walks the sheet unfiltered", async () => {
     const sesi = await admin();
     const summary = await api.getSosialisasiSummary(sesi.token);
-    // 3 approved users (Admin Utama has unit set, Budi has none, Farah...actually approved: Admin, Farah, Budi)
+    // 3 approved users (Admin Utama, Budi, Farah) exactly like the users sheet.
     expect(summary.totalUser).toBe(3);
     expect(summary.approvedUsers.map((u) => u.nrp).sort()).toEqual(["0042", "0987", "admin01"]);
-    const doc3Reads = summary.readMap[3];
-    expect(Object.keys(doc3Reads).sort()).toEqual(["0042", "0987"]);
+    // Farah read twice (seeded duplicate pair); the real read map
+    // overwrites with the record in the LAST sheet row, so her second read wins —
+    // not the first one. Budi has the single read time.
+    expect(summary.readMap[3]["0042"]).toBe(T_BUDI_READ_1 + 1000);
+    expect(summary.readMap[3]["0987"]).toBe(T_BUDI_READ_1);
   });
 
-  it("partitions approved users into sudah/belum for a document, sorted by first read desc", async () => {
+  it("keeps records of users who are no longer Approved in the read map, last record winning", async () => {
+    // The real getSosialisasiSummary loops the Sosialisasi sheet
+    // unfiltered: an NRP whose account got deactivated after reading still
+    // appears in the map (and never in approvedUsers).
+    const rudiRead = T_BUDI_READ_1 + 2000;
+    const rudiReadTwice = T_BUDI_READ_1 + 3000;
+    const seeded: MockSeed = {
+      ...defaultMockSeed(),
+      sosialisasi: [
+        ...defaultMockSeed().sosialisasi,
+        { waktu: rudiRead, nrp: "2222", nama: "Rudi", docRowIndex: 5, judul: "SK Direktur Kebijakan Casemix" },
+        { waktu: rudiReadTwice, nrp: "2222", nama: "Rudi", docRowIndex: 5, judul: "SK Direktur Kebijakan Casemix" },
+      ],
+    };
+    const rudiBackend = createMockBackend(seeded);
+    const rudiApi = createApi(rudiBackend);
+    const sesi = await rudiApi.loginUser("admin01", "demo-ganti-saya");
+    const summary = await rudiApi.getSosialisasiSummary(sesi.token);
+    expect(summary.approvedUsers.map((u) => u.nrp)).not.toContain("2222"); // Rejected account
+    expect(summary.readMap[5]).toMatchObject({ "2222": rudiReadTwice });
+  });
+
+  it("keeps the last read time per user in the detail view and sorts sudah by waktu desc", async () => {
     const sesi = await admin();
     const detail = await api.getSosialisasiDetail(sesi.token, 3);
     expect(detail).toMatchObject({ judul: "Pedoman Penanganan Risiko Rumah Zakat", totalUser: 3 });
-    expect(detail.sudah.map((u) => u.nrp)).toEqual(["0987", "0042"]); // Budi read later, newest first
-    expect(detail.sudah[0]).toMatchObject({ waktu: expect.any(Number) });
+    // Farah's LAST record is later than Budi's only read, so the real
+    // last-write-in-sheet-order map puts her first (waktu = T_BUDI_READ_1 + 1000).
+    expect(detail.sudah.map((u) => u.nrp)).toEqual(["0042", "0987"]);
+    expect(detail.sudah[0]).toMatchObject({ waktu: T_BUDI_READ_1 + 1000, nrp: "0042" });
+    expect(detail.sudah[1]).toMatchObject({ waktu: T_BUDI_READ_1, nrp: "0987" });
     expect(detail.belum.map((u) => u.nrp).sort()).toEqual(["admin01"]);
     for (const person of detail.belum) {
       expect(person).not.toHaveProperty("waktu");
