@@ -75,7 +75,7 @@ export type PendingUser = {
 };
 
 /**
- * Sosialisasi read state per document: docId -> (nrp -> first-read millis).
+ * Sosialisasi read state per document: docId -> (nrp -> first-confirmed millis).
  * Only approved users are counted, and duplicates collapse to the first read.
  */
 export type SosialisasiSummaryData = {

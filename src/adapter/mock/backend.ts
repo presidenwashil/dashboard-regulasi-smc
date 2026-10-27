@@ -157,13 +157,14 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
       const approved = seed.users.filter((u) => u.status === "Approved");
       // approvedUsers is the only approval-filtered part: the real
       // getSosialisasiSummary walks the users sheet for it, but its read map
-      // loops the Sosialisasi sheet unfiltered, each row overwriting its
-      // (doc, NRP) entry — the LAST record in sheet order wins.
+      // loops the Sosialisasi sheet unfiltered. Keep the first confirmation
+      // for each (doc, NRP), matching the one-record domain contract.
       const readMap: Record<string, Record<string, number>> = {};
       for (const record of seed.sosialisasi) {
         const docKey = String(Number(record.docRowIndex));
         readMap[docKey] = readMap[docKey] ?? {};
-        readMap[docKey][normNrp(record.nrp)] = record.waktu;
+        const nrp = normNrp(record.nrp);
+        if (!Object.hasOwn(readMap[docKey], nrp)) readMap[docKey][nrp] = record.waktu;
       }
       return {
         success: true,
@@ -184,18 +185,18 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
       const approved = seed.users
         .filter((u) => u.status === "Approved")
         .map((u) => ({ nama: u.nama, nrp: normNrp(u.nrp), bidang: u.bidang, unit: u.unit || "-" }));
-      // Same last-record-wins overwrite as the real buildSosialisasiDetail_:
-      // every matching sheet row sets (and may replace) the user's time.
-      const lastRead = new Map<string, number>();
+      // Keep the first confirmation if legacy duplicate records exist.
+      const firstRead = new Map<string, number>();
       for (const record of seed.sosialisasi) {
         if (Number(record.docRowIndex) !== docIndex) continue;
-        lastRead.set(normNrp(record.nrp), record.waktu);
+        const nrp = normNrp(record.nrp);
+        if (!firstRead.has(nrp)) firstRead.set(nrp, record.waktu);
       }
       const sudah = approved
-        .filter((u) => lastRead.has(u.nrp))
-        .map((u) => ({ ...u, waktu: lastRead.get(u.nrp)! }))
+        .filter((u) => firstRead.has(u.nrp))
+        .map((u) => ({ ...u, waktu: firstRead.get(u.nrp)! }))
         .sort((a, b) => b.waktu - a.waktu);
-      const belum = approved.filter((u) => !lastRead.has(u.nrp));
+      const belum = approved.filter((u) => !firstRead.has(u.nrp));
       return {
         success: true,
         data: {

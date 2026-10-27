@@ -75,10 +75,8 @@ export function defaultMockSeed(): MockSeed {
   ];
 
   // Sosialisasi sheet records in append order, including a historical
-  // duplicate pair for one (nrp, doc). The real read map keeps the LAST
-  // record per NRP in sheet order (markDocumentRead's per-NRP insert guard
-  // keeps such duplicates rare); the mock mirrors that instead of inventing a
-  // first-read-wins rule the server doesn't have.
+  // duplicate pair for one (nrp, doc). The first confirmation is canonical;
+  // markDocumentRead's per-NRP insert guard keeps new duplicates from appearing.
   const sosialisasi: SosialisasiRecord[] = [
     { waktu: T_FARAH_READ_1, nrp: "0042", nama: "Dr. Farah", docRowIndex: 3, judul: "Pedoman Penanganan Risiko Rumah Zakat" },
     { waktu: T_BUDI_READ_1, nrp: "0987", nama: "Budi", docRowIndex: 3, judul: "Pedoman Penanganan Risiko Rumah Zakat" },
