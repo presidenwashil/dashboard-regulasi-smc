@@ -5,6 +5,19 @@ import type { AdminUser, PendingUser, Sesi } from '../adapter/types';
 
 const PER_PAGE = 10;
 
+function filterByNameAndNrp<T extends { nama: string; nrp: string }>(
+  users: T[],
+  name: string,
+  nrp: string,
+): T[] {
+  const normalizedName = name.trim().toLowerCase();
+  const normalizedNrp = nrp.trim().toLowerCase();
+  return users.filter((user) =>
+    user.nama.toLowerCase().includes(normalizedName) &&
+    user.nrp.toLowerCase().includes(normalizedNrp)
+  );
+}
+
 const statusCls = (s: string): string =>
   s === 'Approved'
     ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
@@ -23,6 +36,10 @@ export default function ApprovalPage({ sesi, notify }: Props) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [pPage, setPPage] = useState(0);
   const [uPage, setUPage] = useState(0);
+  const [pendingName, setPendingName] = useState('');
+  const [pendingNrp, setPendingNrp] = useState('');
+  const [userName, setUserName] = useState('');
+  const [userNrp, setUserNrp] = useState('');
   const [target, setTarget] = useState<AdminUser | null>(null);
   const [pw, setPw] = useState({ a: '', b: '' });
   const [err, setErr] = useState('');
@@ -67,10 +84,12 @@ export default function ApprovalPage({ sesi, notify }: Props) {
     }
   };
 
-  const pp = Math.min(pPage, Math.max(0, Math.ceil(pending.length / PER_PAGE) - 1));
-  const up = Math.min(uPage, Math.max(0, Math.ceil(users.length / PER_PAGE) - 1));
-  const pendingRows = pending.slice(pp * PER_PAGE, (pp + 1) * PER_PAGE);
-  const userRows = users.slice(up * PER_PAGE, (up + 1) * PER_PAGE);
+  const pendingMatches = filterByNameAndNrp(pending, pendingName, pendingNrp);
+  const userMatches = filterByNameAndNrp(users, userName, userNrp);
+  const pp = Math.min(pPage, Math.max(0, Math.ceil(pendingMatches.length / PER_PAGE) - 1));
+  const up = Math.min(uPage, Math.max(0, Math.ceil(userMatches.length / PER_PAGE) - 1));
+  const pendingRows = pendingMatches.slice(pp * PER_PAGE, (pp + 1) * PER_PAGE);
+  const userRows = userMatches.slice(up * PER_PAGE, (up + 1) * PER_PAGE);
 
   return (
     <div className="space-y-6">
@@ -83,6 +102,28 @@ export default function ApprovalPage({ sesi, notify }: Props) {
             <i className="ph ph-arrows-clockwise" /> Refresh
           </button>
         </div>
+        <fieldset aria-label="Filter registrasi Pending" className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 border-b border-gray-700">
+          <label className="block text-xs font-bold text-gray-400 uppercase">
+            Nama
+            <input
+              aria-label="Nama"
+              className="mt-1 w-full px-3 py-2 rounded-lg text-sm normal-case font-normal"
+              placeholder="Cari nama..."
+              value={pendingName}
+              onChange={(e) => { setPendingName(e.target.value); setPPage(0); }}
+            />
+          </label>
+          <label className="block text-xs font-bold text-gray-400 uppercase">
+            NRP
+            <input
+              aria-label="NRP"
+              className="mt-1 w-full px-3 py-2 rounded-lg text-sm normal-case font-normal"
+              placeholder="Cari NRP..."
+              value={pendingNrp}
+              onChange={(e) => { setPendingNrp(e.target.value); setPPage(0); }}
+            />
+          </label>
+        </fieldset>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-175">
             <thead className="bg-gray-800 text-gray-400 text-xs uppercase tracking-wider font-bold border-b border-gray-700">
@@ -112,7 +153,7 @@ export default function ApprovalPage({ sesi, notify }: Props) {
               ))}
             </tbody>
           </table>
-          <Pagination page={pp} perPage={PER_PAGE} total={pending.length} onPage={setPPage} />
+          <Pagination page={pp} perPage={PER_PAGE} total={pendingMatches.length} onPage={setPPage} />
         </div>
       </div>
 
@@ -125,6 +166,28 @@ export default function ApprovalPage({ sesi, notify }: Props) {
             <i className="ph ph-arrows-clockwise" /> Refresh
           </button>
         </div>
+        <fieldset aria-label="Filter semua akun" className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 border-b border-gray-700">
+          <label className="block text-xs font-bold text-gray-400 uppercase">
+            Nama
+            <input
+              aria-label="Nama"
+              className="mt-1 w-full px-3 py-2 rounded-lg text-sm normal-case font-normal"
+              placeholder="Cari nama..."
+              value={userName}
+              onChange={(e) => { setUserName(e.target.value); setUPage(0); }}
+            />
+          </label>
+          <label className="block text-xs font-bold text-gray-400 uppercase">
+            NRP
+            <input
+              aria-label="NRP"
+              className="mt-1 w-full px-3 py-2 rounded-lg text-sm normal-case font-normal"
+              placeholder="Cari NRP..."
+              value={userNrp}
+              onChange={(e) => { setUserNrp(e.target.value); setUPage(0); }}
+            />
+          </label>
+        </fieldset>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-200">
             <thead className="bg-gray-800 text-gray-400 text-xs uppercase tracking-wider font-bold border-b border-gray-700">
@@ -163,7 +226,7 @@ export default function ApprovalPage({ sesi, notify }: Props) {
               ))}
             </tbody>
           </table>
-          <Pagination page={up} perPage={PER_PAGE} total={users.length} onPage={setUPage} />
+          <Pagination page={up} perPage={PER_PAGE} total={userMatches.length} onPage={setUPage} />
         </div>
       </div>
 

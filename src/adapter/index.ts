@@ -20,6 +20,7 @@ import type {
   Dokumen,
   DokumenInput,
   PendingUser,
+  ProfileInput,
   RegistrasiInput,
   RekapPdf,
   Sesi,
@@ -44,6 +45,10 @@ export type Adapter = {
   logoutSesi(sesi: Sesi): Promise<void>;
   /** Self-service Registrasi; resolves the server's success message. */
   registerUser(input: RegistrasiInput): Promise<string>;
+  /** Update the authenticated User's profile; NRP and Status Akun are immutable. */
+  updateMyProfile(sesi: Sesi, input: ProfileInput): Promise<Sesi["user"]>;
+  /** Change the authenticated User's password without requiring the old one. */
+  changeMyPassword(sesi: Sesi, newPassword: string): Promise<string>;
   /** Public master list of Bidang (used by Registrasi and the Dokumen form). */
   getMasterBidang(): Promise<string[]>;
   /**
@@ -147,6 +152,23 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
     async registerUser(input) {
       const nrp = String(input.nrp ?? "").trim();
       const response = await call<ServerEnvelope>("registerUser", { ...input, nrp });
+      return response.message ?? "";
+    },
+    async updateMyProfile(sesi, input) {
+      const envelope = await call<ServerEnvelope>(
+        "updateMyProfile",
+        sesi.token,
+        {
+          nama: input.nama,
+          profesi: input.profesi,
+          bidang: input.bidang,
+          unit: input.unit,
+        },
+      );
+      return envelope.user!;
+    },
+    async changeMyPassword(sesi, newPassword) {
+      const response = await call<ServerEnvelope>("changeMyPassword", sesi.token, newPassword);
       return response.message ?? "";
     },
     async logoutSesi(sesi) {

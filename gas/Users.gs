@@ -74,6 +74,79 @@ function resetUserPassword(token, rowIndex, newPassword) {
   }
 }
 
+function updateMyProfile(token, profile) {
+  var auth = requireAccess_(token);
+  if (auth.error) return auth.error;
+
+  try {
+    var nrp = (auth.session.nrp || "").toString().trim();
+    var sheet = getUsersSheet_();
+    var rows = sheet.getDataRange().getValues();
+    for (var i = 1; i < rows.length; i++) {
+      if ((rows[i][5] || "").toString().trim() !== nrp) continue;
+
+      var user = {
+        nama: (profile.nama || "").toString().trim(),
+        profesi: (profile.profesi || "").toString().trim(),
+        bidang: (profile.bidang || "").toString().trim(),
+        unit: (profile.unit || "").toString().trim(),
+        nrp: nrp,
+        role: auth.session.role,
+        sessionVersion: auth.session.sessionVersion || currentSessionVersion_(nrp),
+      };
+      sheet.getRange(i + 1, 2, 1, 4).setValues([
+        [user.nama, user.profesi, user.bidang, user.unit],
+      ]);
+      CacheService.getScriptCache().put(
+        token,
+        JSON.stringify(user),
+        CONFIG.SESSION_SECONDS,
+      );
+      return { success: true, user: publicUser_(user) };
+    }
+    return { success: false, message: "User tidak ditemukan." };
+  } catch (err) {
+    return { success: false, message: "Gagal memperbarui profil: " + err.toString() };
+  }
+}
+
+function changeMyPassword(token, newPassword) {
+  var auth = requireAccess_(token);
+  if (auth.error) return auth.error;
+
+  newPassword = (newPassword || "").toString();
+  if (newPassword.length < 6) {
+    return { success: false, message: "Password baru minimal 6 karakter." };
+  }
+
+  try {
+    var nrp = (auth.session.nrp || "").toString().trim();
+    var sheet = getUsersSheet_();
+    var rows = sheet.getDataRange().getValues();
+    for (var i = 1; i < rows.length; i++) {
+      if ((rows[i][5] || "").toString().trim() !== nrp) continue;
+
+      var salt = generateSalt_();
+      var changed = revokeOtherSessions_(nrp, token, auth.session, function () {
+        sheet.getRange(i + 1, 7, 1, 2).setValues([
+          [hashPassword_(newPassword, salt), salt],
+        ]);
+      });
+      if (!changed) {
+        return {
+          success: false,
+          message: "Sesi tidak valid, silakan login ulang.",
+          sessionExpired: true,
+        };
+      }
+      return { success: true, message: "Password berhasil diubah." };
+    }
+    return { success: false, message: "User tidak ditemukan." };
+  } catch (err) {
+    return { success: false, message: "Gagal mengubah password: " + err.toString() };
+  }
+}
+
 function getUserStats(token) {
   var auth = requireAccess_(token);
   if (auth.error) return auth.error;

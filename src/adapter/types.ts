@@ -75,7 +75,7 @@ export type PendingUser = {
 };
 
 /**
- * Sosialisasi read state per document: docId -> (nrp -> first-read millis).
+ * Sosialisasi read state per document: docId -> (nrp -> first-confirmed millis).
  * Only approved users are counted, and duplicates collapse to the first read.
  */
 export type SosialisasiSummaryData = {
@@ -128,6 +128,9 @@ export type RegistrasiInput = {
   nrp: string;
   password: string;
 };
+
+/** Self-service profile fields; identity and access status stay server-owned. */
+export type ProfileInput = Pick<User, "nama" | "profesi" | "bidang" | "unit">;
 
 /** File payload: read client-side to base64 (existing upload contract). */
 export type FilePayload = { name: string; mimeType: string; data: string };

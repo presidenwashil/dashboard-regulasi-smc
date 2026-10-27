@@ -194,6 +194,36 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     ]);
   });
 
+  it("uses only the authenticated Sesi for self-service profile and password changes", async () => {
+    const calls: unknown[][] = [];
+    const backend = new Proxy({} as Backend, {
+      get(_target, fnName) {
+        return (...args: unknown[]) => {
+          calls.push([fnName, ...args]);
+          if (fnName === "updateMyProfile") {
+            return { success: true, user: { ...testSesi("tok").user, nama: "Farah Baru" } };
+          }
+          return { success: true, message: "Password berhasil diubah." };
+        };
+      },
+    });
+    const sesi = testSesi("tok");
+    const api = createApi(backend);
+
+    await expect(api.updateMyProfile(sesi, {
+      nama: "Farah Baru",
+      profesi: "Dokter",
+      bidang: "Yanmed",
+      unit: "IGD",
+    })).resolves.toMatchObject({ nama: "Farah Baru", nrp: "0042" });
+    await expect(api.changeMyPassword(sesi, "password-baru")).resolves.toContain("berhasil");
+
+    expect(calls).toEqual([
+      ["updateMyProfile", "tok", { nama: "Farah Baru", profesi: "Dokter", bidang: "Yanmed", unit: "IGD" }],
+      ["changeMyPassword", "tok", "password-baru"],
+    ]);
+  });
+
   it("saves a Dokumen as the legacy payload with comma-joined lists and defaulted statusBerlaku", async () => {
     const calls: unknown[][] = [];
     const backend = new Proxy({} as Backend, {

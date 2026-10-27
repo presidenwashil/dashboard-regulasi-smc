@@ -19,7 +19,48 @@ function hashPassword_(password, salt) {
 function getSessionUser_(token) {
   if (!token) return null;
   var raw = CacheService.getScriptCache().get(token);
-  return raw ? JSON.parse(raw) : null;
+  if (!raw) return null;
+  var session = JSON.parse(raw);
+  var version = currentSessionVersion_(session.nrp);
+  return (session.sessionVersion || "0").toString() === version ? session : null;
+}
+
+function sessionVersionKey_(nrp) {
+  return "SESSION_VERSION_" + encodeURIComponent((nrp || "").toString().trim());
+}
+
+function currentSessionVersion_(nrp) {
+  return PropertiesService.getScriptProperties().getProperty(sessionVersionKey_(nrp)) || "0";
+}
+
+function publicUser_(session) {
+  return {
+    nama: session.nama,
+    profesi: session.profesi,
+    bidang: session.bidang,
+    unit: session.unit,
+    nrp: session.nrp,
+    role: session.role,
+  };
+}
+
+function revokeOtherSessions_(nrp, currentToken, activeSession, savePassword) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    var currentSession = getSessionUser_(currentToken);
+    if (!currentSession || currentSession.sessionVersion !== activeSession.sessionVersion) {
+      return false;
+    }
+    savePassword();
+    var version = String(Number(currentSessionVersion_(nrp)) + 1);
+    PropertiesService.getScriptProperties().setProperty(sessionVersionKey_(nrp), version);
+    currentSession.sessionVersion = version;
+    CacheService.getScriptCache().put(currentToken, JSON.stringify(currentSession), CONFIG.SESSION_SECONDS);
+    return true;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function requireAccess_(token, role) {
@@ -123,6 +164,7 @@ function loginUser(nrp, password) {
         unit: rows[i][4],
         nrp: nrp,
         role: role,
+        sessionVersion: currentSessionVersion_(nrp),
       };
       var token = Utilities.getUuid();
       CacheService.getScriptCache().put(
@@ -131,7 +173,7 @@ function loginUser(nrp, password) {
         CONFIG.SESSION_SECONDS,
       );
 
-      return { success: true, token: token, user: userInfo };
+      return { success: true, token: token, user: publicUser_(userInfo) };
     }
 
     return { success: false, message: "NRP atau password salah." };
@@ -141,8 +183,6 @@ function loginUser(nrp, password) {
 }
 
 function logoutSession(token) {
-  try {
-    CacheService.getScriptCache().remove(token);
-  } catch (e) {}
+  CacheService.getScriptCache().remove(token);
   return { success: true };
 }

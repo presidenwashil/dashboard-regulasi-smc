@@ -5,6 +5,7 @@ import vm from 'node:vm';
 
 export function loadGas(files: string[], overrides: Record<string, unknown> = {}) {
   const cache = new Map<string, string>();
+  const properties = new Map<string, string>();
 
   const context: Record<string, unknown> = {
     Utilities: {
@@ -25,6 +26,15 @@ export function loadGas(files: string[], overrides: Record<string, unknown> = {}
         get: (k: string) => cache.get(k) ?? null,
         remove: (k: string) => cache.delete(k),
       }),
+    },
+    PropertiesService: {
+      getScriptProperties: () => ({
+        getProperty: (k: string) => properties.get(k) ?? null,
+        setProperty: (k: string, v: string) => properties.set(k, v),
+      }),
+    },
+    LockService: {
+      getScriptLock: () => ({ waitLock: () => undefined, releaseLock: () => undefined }),
     },
     Logger: { log: () => undefined },
     Session: { getScriptTimeZone: () => 'Asia/Makassar' },

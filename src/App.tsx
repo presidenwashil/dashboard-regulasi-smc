@@ -12,8 +12,10 @@ import DashboardPage from './pages/DashboardPage';
 import SosialisasiPage from './pages/SosialisasiPage';
 import FormPage from './pages/FormPage';
 import ApprovalPage from './pages/ApprovalPage';
+import AccountPage from './pages/AccountPage';
+import UserSosialisasiProgressPage from './pages/UserSosialisasiProgressPage';
 
-type TabId = 'dashboard' | 'sosialisasi' | 'form' | 'approval';
+type TabId = 'dashboard' | 'sosialisasi' | 'form' | 'approval' | 'account' | 'progress-sosialisasi';
 
 interface TabDef {
   id: TabId;
@@ -27,6 +29,7 @@ const TABS: TabDef[] = [
   { id: 'sosialisasi', label: 'Sosialisasi Dokumen', icon: 'ph-book-open-check' },
   { id: 'form', label: 'Input Dokumen Baru', icon: 'ph-file-plus' },
   { id: 'approval', label: 'Approval User', icon: 'ph-user-check', adminOnly: true },
+  { id: 'progress-sosialisasi', label: 'Progress Sosialisasi User', icon: 'ph-users-three', adminOnly: true },
 ];
 
 type AppProps = {
@@ -105,6 +108,12 @@ export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
     clearSession();
   };
 
+  const handleProfileUpdated = (user: Sesi['user']) => {
+    const updatedSession = { ...session!, user };
+    saveSesi(updatedSession);
+    setSession(updatedSession);
+  };
+
   if (!session) {
     return (
       <AdapterProvider api={appApi}>
@@ -155,9 +164,14 @@ export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
           <span className="font-semibold">{session.user.nama}</span>
           <span className="text-xs bg-gray-700 px-2 py-0.5 rounded-full text-cyan-400">{session.user.role}</span>
         </div>
-        <button onClick={handleLogout} className="text-red-400 hover:text-red-300 flex items-center gap-1 font-semibold">
-          <i className="ph ph-sign-out text-lg" /> Keluar
-        </button>
+        <div className="flex items-center gap-4">
+          <button onClick={() => goTab('account')} className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-semibold">
+            <i className="ph ph-user-gear text-lg" /> Akun
+          </button>
+          <button onClick={handleLogout} className="text-red-400 hover:text-red-300 flex items-center gap-1 font-semibold">
+            <i className="ph ph-sign-out text-lg" /> Keluar
+          </button>
+        </div>
       </div>
 
       <nav className="flex flex-wrap gap-3 mb-6">
@@ -199,6 +213,12 @@ export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
         />
       )}
       {tab === 'approval' && isAdmin && <ApprovalPage sesi={session} notify={notify} />}
+      {tab === 'account' && (
+        <AccountPage sesi={session} notify={notify} onProfileUpdated={handleProfileUpdated} />
+      )}
+      {tab === 'progress-sosialisasi' && isAdmin && (
+        <UserSosialisasiProgressPage docs={docs} session={session} notify={notify} />
+      )}
 
       <Toast toast={toast} />
     </div>
