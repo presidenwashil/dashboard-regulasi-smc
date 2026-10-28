@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAdapter } from '../adapter/context';
-import { Chip, type Notify } from '../components/Shared';
+import { Chip, DataTable, type DataTableColumn, type Notify } from '../components/Shared';
 import { fmtWaktu, isAktif, requireDocId } from '../utils';
 import type { Dokumen, Sesi, SosialisasiSummaryData } from '../adapter/types';
 
@@ -18,6 +18,16 @@ export default function UserSosialisasiProgressPage({ docs, session, notify }: P
     () => docs.filter(isAktif),
     [docs],
   );
+  const users = useMemo(
+    () => summary ? [...summary.approvedUsers].sort((a, b) => a.nama.localeCompare(b.nama, 'id')) : [],
+    [summary],
+  );
+  const rows = useMemo(() => users.map((user) => {
+    const sudah = activeDocs.filter((doc) =>
+      Object.hasOwn(summary?.readMap[requireDocId(doc)] ?? {}, user.nrp),
+    ).length;
+    return { ...user, sudah, belum: activeDocs.length - sudah };
+  }), [activeDocs, summary, users]);
 
   useEffect(() => {
     api.getSosialisasiSummary(session)
@@ -29,9 +39,29 @@ export default function UserSosialisasiProgressPage({ docs, session, notify }: P
     return <div role="status" className="p-8 text-center text-cyan-400">Memuat progress sosialisasi...</div>;
   }
 
-  const users = [...summary.approvedUsers].sort((a, b) => a.nama.localeCompare(b.nama, 'id'));
-  const hasRead = (nrp: string, doc: Dokumen) =>
-    Object.hasOwn(summary.readMap[requireDocId(doc)] ?? {}, nrp);
+  const columns: DataTableColumn<(typeof rows)[number]>[] = [
+    { key: 'nama', label: 'User', render: (user) => <span className="font-semibold text-gray-200">{user.nama}</span> },
+    { key: 'nrp', label: 'NRP', render: (user) => <span className="font-mono text-xs text-cyan-400">{user.nrp}</span> },
+    { key: 'progress', label: 'Progress', render: (user) => <div className="text-center text-gray-300">{user.sudah} sudah · {user.belum} belum</div> },
+    {
+      key: 'rincian',
+      label: 'Rincian',
+      render: (user) => {
+        const expanded = expandedNrp === user.nrp;
+        return (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            onClick={() => setExpandedNrp(expanded ? null : user.nrp)}
+            className="text-xs font-bold text-cyan-400 hover:underline"
+          >
+            {expanded ? `Tutup rincian ${user.nama}` : `Lihat rincian ${user.nama}`}
+          </button>
+        );
+      },
+    },
+  ];
+  const expandedUser = users.find((user) => user.nrp === expandedNrp);
 
   return (
     <section className="space-y-4">
@@ -44,122 +74,65 @@ export default function UserSosialisasiProgressPage({ docs, session, notify }: P
         </p>
       </header>
 
-      <div className="bg-gray-800 rounded-2xl shadow-lg overflow-hidden border border-gray-700">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[700px]">
-            <thead className="bg-gray-800 text-gray-400 text-xs uppercase tracking-wider font-bold border-b border-gray-700">
-              <tr>
-                <th className="p-4">User</th>
-                <th className="p-4">NRP</th>
-                <th className="p-4 text-center">Progress</th>
-                <th className="p-4 text-center">Rincian</th>
-              </tr>
-            </thead>
-            <tbody className="text-sm divide-y divide-gray-700">
-              {users.length === 0 && (
-                <tr><td colSpan={4} className="p-8 text-center text-gray-500">Belum ada User Approved.</td></tr>
-              )}
-              {users.map((user) => {
-                const sudah = activeDocs.filter((doc) => hasRead(user.nrp, doc)).length;
-                const belum = activeDocs.length - sudah;
-                const expanded = expandedNrp === user.nrp;
-                return (
-                  <UserProgressRows
-                    key={user.nrp}
-                    user={user}
-                    docs={activeDocs}
-                    readMap={summary.readMap}
-                    sudah={sudah}
-                    belum={belum}
-                    expanded={expanded}
-                    onToggle={() => setExpandedNrp(expanded ? null : user.nrp)}
-                  />
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DataTable
+        columns={columns}
+        rows={rows}
+        getRowKey={(user) => user.nrp}
+        emptyMessage="Belum ada User Approved."
+      />
+      {expandedUser && (
+        <UserDocumentDetails
+          user={expandedUser}
+          docs={activeDocs}
+          readMap={summary.readMap}
+        />
+      )}
     </section>
   );
 }
 
 type UserSummary = SosialisasiSummaryData['approvedUsers'][number];
 
-function UserProgressRows({
+function UserDocumentDetails({
   user,
   docs,
   readMap,
-  sudah,
-  belum,
-  expanded,
-  onToggle,
 }: {
   user: UserSummary;
   docs: Dokumen[];
   readMap: SosialisasiSummaryData['readMap'];
-  sudah: number;
-  belum: number;
-  expanded: boolean;
-  onToggle: () => void;
 }) {
+  const columns: DataTableColumn<Dokumen>[] = [
+    { key: 'judul', label: 'Dokumen Aktif', render: (doc) => <span className="text-gray-200">{doc.judul}</span> },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (doc) => {
+        const confirmed = Object.hasOwn(readMap[requireDocId(doc)] ?? {}, user.nrp);
+        return <div className="text-center"><Chip ok={confirmed}>{confirmed ? 'Sudah Dibaca' : 'Belum Dibaca'}</Chip></div>;
+      },
+    },
+    {
+      key: 'waktu',
+      label: 'Waktu Konfirmasi',
+      render: (doc) => {
+        const time = readMap[requireDocId(doc)] ?? {};
+        return Object.hasOwn(time, user.nrp)
+          ? <time className="text-xs text-gray-400" dateTime={new Date(time[user.nrp]).toISOString()}>{fmtWaktu(time[user.nrp])}</time>
+          : <span className="text-xs text-gray-400">-</span>;
+      },
+    },
+  ];
+
   return (
-    <>
-      <tr className="hover:bg-gray-700/50">
-        <td className="p-4 font-semibold text-gray-200">{user.nama}</td>
-        <td className="p-4 font-mono text-xs text-cyan-400">{user.nrp}</td>
-        <td className="p-4 text-center text-gray-300">{sudah} sudah · {belum} belum</td>
-        <td className="p-4 text-center">
-          <button
-            type="button"
-            aria-expanded={expanded}
-            onClick={onToggle}
-            className="text-xs font-bold text-cyan-400 hover:underline"
-          >
-            {expanded ? `Tutup rincian ${user.nama}` : `Lihat rincian ${user.nama}`}
-          </button>
-        </td>
-      </tr>
-      {expanded && (
-        <tr>
-          <td colSpan={4} className="p-4 bg-gray-900/50">
-            <h4 className="font-bold text-gray-200 mb-3">Rincian Dokumen — {user.nama}</h4>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[600px]">
-                <thead className="text-xs uppercase tracking-wider text-gray-500">
-                  <tr>
-                    <th className="p-3">Dokumen Aktif</th>
-                    <th className="p-3 text-center">Status</th>
-                    <th className="p-3">Waktu Konfirmasi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700">
-                  {docs.map((doc) => {
-                    const time = readMap[requireDocId(doc)] ?? {};
-                    const confirmed = Object.hasOwn(time, user.nrp);
-                    return (
-                      <tr key={doc.docId}>
-                        <td className="p-3 text-gray-200">{doc.judul}</td>
-                        <td className="p-3 text-center"><Chip ok={confirmed}>{confirmed ? 'Sudah Dibaca' : 'Belum Dibaca'}</Chip></td>
-                        <td className="p-3 text-xs text-gray-400">
-                          {confirmed ? (
-                            <time dateTime={new Date(time[user.nrp]).toISOString()}>
-                              {fmtWaktu(time[user.nrp])}
-                            </time>
-                          ) : '-'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {docs.length === 0 && (
-                    <tr><td colSpan={3} className="p-4 text-center text-gray-500">Tidak ada Dokumen Aktif.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
+    <section className="space-y-3 rounded-2xl border border-gray-700 bg-gray-800 p-4">
+      <h4 className="font-bold text-gray-200">Rincian Dokumen — {user.nama}</h4>
+      <DataTable
+        columns={columns}
+        rows={docs}
+        getRowKey={(doc) => doc.docId ?? doc.judul}
+        emptyMessage="Tidak ada Dokumen Aktif."
+      />
+    </section>
   );
 }
