@@ -209,7 +209,12 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
       return {
         success: true,
         totalUser: approved.length,
-        approvedUsers: approved.map((u) => ({ nrp: normNrp(u.nrp), nama: u.nama })),
+        approvedUsers: approved.map((u) => ({
+          nrp: normNrp(u.nrp),
+          nama: u.nama,
+          bidang: u.bidang,
+          unit: u.unit,
+        })),
         readMap,
       };
     },

@@ -247,6 +247,8 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
         approvedUsers: (envelope.approvedUsers ?? []).map((u) => ({
           nrp: String(u.nrp).trim(),
           nama: String(u.nama ?? ""),
+          bidang: String(u.bidang ?? "").trim(),
+          unit: String(u.unit ?? "").trim(),
         })),
         readMap: normalizeReadMap(envelope.readMap),
       };

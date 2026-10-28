@@ -132,6 +132,28 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     await expect(api.loginUser("0042", "rahasia")).resolves.toEqual({ token: "tok-1", user });
   });
 
+  it("preserves and normalizes Bidang and Unit in the progress summary envelope", async () => {
+    const backend = {
+      getSosialisasiSummary: () => ({
+        success: true,
+        totalUser: 2,
+        approvedUsers: [
+          { nrp: " 0012 ", nama: "Nia", bidang: " SDM ", unit: " IGD " },
+          { nrp: "0042", nama: "Farah", bidang: "  ", unit: null },
+        ],
+        readMap: {},
+      }),
+    } as unknown as Backend;
+    const api = createApi(backend);
+
+    await expect(api.getSosialisasiSummary(testSesi("tok-summary"))).resolves.toMatchObject({
+      approvedUsers: [
+        { nrp: "0012", nama: "Nia", bidang: "SDM", unit: "IGD" },
+        { nrp: "0042", nama: "Farah", bidang: "", unit: "" },
+      ],
+    });
+  });
+
   it("passes the session token as the explicit first argument for authenticated calls", async () => {
     const calls: unknown[][] = [];
     const backend = new Proxy({} as Backend, {

@@ -80,7 +80,7 @@ export type PendingUser = {
  */
 export type SosialisasiSummaryData = {
   totalUser: number;
-  approvedUsers: Array<{ nrp: string; nama: string }>;
+  approvedUsers: Array<{ nrp: string; nama: string; bidang: string; unit: string }>;
   readMap: Record<number, Record<string, number>>;
 };
 
@@ -164,7 +164,12 @@ export type ServerEnvelope = {
   user?: User;
   data?: unknown;
   totalUser?: number;
-  approvedUsers?: Array<{ nrp: string; nama: string }>;
+  approvedUsers?: Array<{
+    nrp: string;
+    nama: string;
+    bidang?: string | null;
+    unit?: string | null;
+  }>;
   readMap?: Record<string, Record<string, number>>;
   byBidang?: Record<string, number>;
   byUnit?: Record<string, number>;
