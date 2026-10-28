@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAdapter } from '../adapter/context';
 import { fmtWaktu } from '../utils';
 import type { Sesi, SosialisasiDetailData, SosialisasiPerson } from '../adapter/types';
-import type { Notify } from '../components/Shared';
+import { DataTable } from '../components/Shared';
+import type { DataTableColumn, Notify } from '../components/Shared';
 
 interface Props {
   docId: number;
@@ -12,12 +13,17 @@ interface Props {
 }
 
 type Tab = 'sudah' | 'belum';
+type ReaderRow = SosialisasiPerson & { no: number };
 
 export default function SosialisasiDetailPage({ docId, sesi, notify, onBack }: Props) {
   const api = useAdapter();
   const [data, setData] = useState<SosialisasiDetailData | null>(null);
   const [tab, setTab] = useState<Tab>('sudah');
   const [pdfBusy, setPdfBusy] = useState(false);
+  const rows = useMemo(() => {
+    const list = tab === 'sudah' ? data?.sudah ?? [] : data?.belum ?? [];
+    return list.map((person, index) => ({ ...person, no: index + 1 }));
+  }, [data, tab]);
 
   useEffect(() => {
     api.getSosialisasiDetail(sesi, docId)
@@ -50,7 +56,20 @@ export default function SosialisasiDetailPage({ docId, sesi, notify, onBack }: P
 
   const totalRead = data.sudah.length;
   const pct = data.totalUser > 0 ? Math.round((totalRead / data.totalUser) * 100) : 0;
-  const list: SosialisasiPerson[] = tab === 'sudah' ? data.sudah : data.belum;
+  const columns: DataTableColumn<ReaderRow>[] = [
+    { key: 'no', label: 'No', render: (person) => person.no },
+    { key: 'nama', label: 'Nama', render: (person) => <span className="font-semibold text-gray-200">{person.nama}</span> },
+    { key: 'nrp', label: 'NRP', render: (person) => <span className="font-mono text-xs text-cyan-400">{person.nrp}</span> },
+    { key: 'bidang', label: 'Bidang', render: (person) => person.bidang },
+    { key: 'unit', label: 'Unit', render: (person) => person.unit },
+    ...(tab === 'sudah'
+      ? [{
+          key: 'waktu',
+          label: 'Waktu Baca',
+          render: (person: ReaderRow) => person.waktu !== undefined ? fmtWaktu(person.waktu) : '-',
+        }]
+      : []),
+  ];
 
   const tabCls = (active: boolean) =>
     `px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
@@ -98,41 +117,12 @@ export default function SosialisasiDetailPage({ docId, sesi, notify, onBack }: P
         </button>
       </div>
 
-      <div className="bg-gray-800 rounded-2xl shadow-lg overflow-hidden border border-gray-700">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[700px]">
-            <thead className="bg-gray-800 text-gray-400 text-xs uppercase tracking-wider font-bold border-b border-gray-700">
-              <tr>
-                <th className="p-3 w-10">No</th>
-                <th className="p-3">Nama</th>
-                <th className="p-3">NRP</th>
-                <th className="p-3">Bidang</th>
-                <th className="p-3">Unit</th>
-                {tab === 'sudah' && <th className="p-3">Waktu Baca</th>}
-              </tr>
-            </thead>
-            <tbody className="text-sm divide-y divide-gray-700">
-              {list.length === 0 && (
-                <tr>
-                  <td colSpan={tab === 'sudah' ? 6 : 5} className="p-6 text-center text-gray-500">
-                    {tab === 'sudah' ? 'Belum ada yang membaca.' : 'Semua karyawan sudah membaca.'}
-                  </td>
-                </tr>
-              )}
-              {list.map((u, i) => (
-                <tr key={u.nrp} className="hover:bg-gray-700/50">
-                  <td className="p-3 text-gray-500 text-xs">{i + 1}</td>
-                  <td className="p-3 text-gray-200 font-semibold">{u.nama}</td>
-                  <td className="p-3 text-cyan-400 font-mono text-xs">{u.nrp}</td>
-                  <td className="p-3 text-gray-400">{u.bidang}</td>
-                  <td className="p-3 text-gray-400">{u.unit}</td>
-                  {tab === 'sudah' && <td className="p-3 text-gray-400 text-xs">{u.waktu !== undefined ? fmtWaktu(u.waktu) : '-'}</td>}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DataTable
+        columns={columns}
+        rows={rows}
+        getRowKey={(person) => person.nrp}
+        emptyMessage={tab === 'sudah' ? 'Belum ada yang membaca.' : 'Semua karyawan sudah membaca.'}
+      />
     </div>
   );
 }
