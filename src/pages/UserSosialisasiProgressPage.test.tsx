@@ -24,7 +24,7 @@ describe("UserSosialisasiProgressPage", () => {
     ];
   };
 
-  it("shows each Approved User's counts across active documents and confirmed read times", async () => {
+  it("shows each Approved User's progress counts and opens the per-user Dokumen detail", async () => {
     const user = userEvent.setup();
     const api = createApi(createMockBackend());
     const session = await api.loginUser("admin01", "demo-ganti-saya");
@@ -39,36 +39,47 @@ describe("UserSosialisasiProgressPage", () => {
     const userTable = (await screen.findAllByRole("table"))[0]!;
     const farahRow = within(userTable).getByText("Dr. Farah").closest("tr");
     expect(farahRow).not.toBeNull();
-    expect(within(farahRow!).getByText("1 sudah · 1 belum")).toBeInTheDocument();
+    expect(within(farahRow!).getByText("1 / 2 dokumen")).toBeInTheDocument();
     const budiRow = within(userTable).getByText("Budi").closest("tr");
     expect(budiRow).not.toBeNull();
-    expect(within(budiRow!).getByText("1 sudah · 1 belum")).toBeInTheDocument();
+    expect(within(budiRow!).getByText("1 / 2 dokumen")).toBeInTheDocument();
     const adminRow = within(userTable).getByText("Admin Utama").closest("tr");
     expect(adminRow).not.toBeNull();
-    expect(within(adminRow!).getByText("0 sudah · 2 belum")).toBeInTheDocument();
+    expect(within(adminRow!).getByText("0 / 2 dokumen")).toBeInTheDocument();
     expect(within(userTable).queryByText("Sinta")).not.toBeInTheDocument();
     expect(within(userTable).queryByText("Rudi")).not.toBeInTheDocument();
 
-    await user.click(within(userTable).getByRole("button", { name: "Lihat rincian Dr. Farah" }));
-    const detailTable = (await screen.findAllByRole("table"))[1]!;
-    expect(within(detailTable).getByText("SPO Data Entry Data Casemix")).toBeInTheDocument();
+    await user.click(within(userTable).getByRole("button", { name: "Lihat detail sosialisasi Dr. Farah" }));
+    expect(await screen.findByRole("heading", { name: "Dr. Farah" })).toBeInTheDocument();
+    expect(screen.getByText("1 / 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Kembali ke Progress Sosialisasi User" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sudah Tersosialisasi (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Belum Membaca (1)" })).toBeInTheDocument();
+
+    const detailTable = screen.getAllByRole("table")[0]!;
     expect(within(detailTable).getByText("Pedoman Penanganan Risiko Rumah Zakat")).toBeInTheDocument();
     expect(within(detailTable).queryByText("Panduan Terkait PPI")).not.toBeInTheDocument();
     expect(within(detailTable).queryByText("SK Direktur Kebijakan Casemix")).not.toBeInTheDocument();
 
     const readRow = within(detailTable).getByText("Pedoman Penanganan Risiko Rumah Zakat").closest("tr");
     expect(readRow).not.toBeNull();
-    expect(within(readRow!).getByText("Sudah Dibaca")).toBeInTheDocument();
     expect(within(readRow!).getByRole("time")).toHaveAttribute(
       "dateTime",
       new Date(T_FARAH_READ_1).toISOString(),
     );
-    const unreadRow = within(detailTable).getByText("SPO Data Entry Data Casemix").closest("tr");
-    expect(unreadRow).not.toBeNull();
-    expect(within(unreadRow!).getByText("Belum Dibaca")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Belum Membaca (1)" }));
+    const belumTable = screen.getAllByRole("table")[0]!;
+    expect(within(belumTable).getByText("SPO Data Entry Data Casemix")).toBeInTheDocument();
+    expect(within(belumTable).queryByRole("time")).not.toBeInTheDocument();
+    expect(within(belumTable).getAllByText("-").length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: "Kembali ke Progress Sosialisasi User" }));
+    const restoredTable = (await screen.findAllByRole("table"))[0]!;
+    expect(within(restoredTable).getByText("Dr. Farah")).toBeInTheDocument();
   });
 
-  it("paginates users and expanded Dokumen details independently", async () => {
+  it("paginates the User list and preserves its state when returning from the detail page", async () => {
     const user = userEvent.setup();
     const seed = defaultMockSeed();
     const admin = seed.users[0]!;
@@ -115,35 +126,31 @@ describe("UserSosialisasiProgressPage", () => {
     const outerTable = (await screen.findAllByRole("table"))[0]!;
     expect(within(outerTable).getByText("User 01")).toBeInTheDocument();
     expect(within(outerTable).queryByText("User 11")).not.toBeInTheDocument();
-    const navigation = screen.getAllByRole("navigation", { name: "Navigasi halaman tabel" });
-    await user.click(within(navigation[0]!).getByRole("button", { name: "Selanjutnya" }));
-    expect(within(outerTable).getByText("User 11")).toBeInTheDocument();
-    expect(within(outerTable).getByText("1 sudah · 10 belum")).toBeInTheDocument();
-
-    const bidangFilter = screen.getByRole("combobox", { name: "Filter Bidang" });
-    await user.selectOptions(
-      bidangFilter,
-      within(bidangFilter).getByRole("option", { name: "IT" }).getAttribute("value")!,
+    expect(screen.getAllByRole("navigation", { name: "Navigasi halaman tabel" })).toHaveLength(1);
+    await user.click(
+      within(screen.getAllByRole("navigation", { name: "Navigasi halaman tabel" })[0]!)
+        .getByRole("button", { name: "Selanjutnya" }),
     );
-    expect(within(outerTable).getByText("User 01")).toBeInTheDocument();
-    expect(within(outerTable).queryByText("User 11")).not.toBeInTheDocument();
-    await user.selectOptions(bidangFilter, "");
-    await user.click(within(screen.getAllByRole("navigation", { name: "Navigasi halaman tabel" })[0]!).getByRole("button", { name: "Selanjutnya" }));
+    expect(within(outerTable).getByText("User 11")).toBeInTheDocument();
+    expect(within(outerTable).getByText("1 / 11 dokumen")).toBeInTheDocument();
 
-    await user.click(within(outerTable).getByRole("button", { name: "Lihat rincian User 11" }));
-    const detailTable = (await screen.findAllByRole("table"))[1]!;
-    expect(within(detailTable).getByText("Dokumen 11")).toBeInTheDocument();
-    expect(within(detailTable).queryByText("Dokumen 01")).not.toBeInTheDocument();
-    await user.click(within(screen.getAllByRole("navigation", { name: "Navigasi halaman tabel" })[1]!).getByRole("button", { name: "Selanjutnya" }));
-    expect(within(detailTable).getByText("Dokumen 01")).toBeInTheDocument();
-    expect(within(detailTable).getByText("Sudah Dibaca")).toBeInTheDocument();
-    expect(within(detailTable).getByRole("time")).toHaveAttribute(
+    await user.click(within(outerTable).getByRole("button", { name: "Lihat detail sosialisasi User 11" }));
+    expect(await screen.findByRole("heading", { name: "User 11" })).toBeInTheDocument();
+    expect(screen.getByText("1 / 11")).toBeInTheDocument();
+    expect(within(screen.getAllByRole("table")[0]!).getByRole("time")).toHaveAttribute(
       "dateTime",
       new Date(T_FARAH_READ_1).toISOString(),
     );
+
+    await user.click(screen.getByRole("button", { name: "Kembali ke Progress Sosialisasi User" }));
+    const restoredTable = (await screen.findAllByRole("table"))[0]!;
+    expect(within(restoredTable).getByText("User 11")).toBeInTheDocument();
+    expect(within(restoredTable).queryByText("User 01")).not.toBeInTheDocument();
+    expect(screen.getByText("Menampilkan 11 - 12 dari total 12 data")).toBeInTheDocument();
+    expect(screen.getAllByRole("navigation", { name: "Navigasi halaman tabel" })).toHaveLength(1);
   });
 
-  it("uses the table loading state before showing empty Dokumen details", async () => {
+  it("uses the table loading state and the empty Dokumen detail when nothing is active", async () => {
     const user = userEvent.setup();
     const seed = defaultMockSeed();
     seed.documents = [];
@@ -169,11 +176,19 @@ describe("UserSosialisasiProgressPage", () => {
 
     expect(screen.getByText("Status dihitung dari konfirmasi baca untuk 0 Dokumen Aktif dan 3 User Approved.")).toBeInTheDocument();
     const userTable = (await screen.findAllByRole("table"))[0]!;
-    await user.click(within(userTable).getByRole("button", { name: "Lihat rincian Dr. Farah" }));
+    expect(within(userTable).getAllByText("0 / 0 dokumen")).toHaveLength(3);
+    await user.click(within(userTable).getByRole("button", { name: "Lihat detail sosialisasi Dr. Farah" }));
     expect(await screen.findByText("Tidak ada Dokumen Aktif.")).toBeInTheDocument();
+    expect(screen.getByText("0 / 0")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sudah Tersosialisasi (0)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Belum Membaca (0)" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Kembali ke Progress Sosialisasi User" }));
+    const restoredTable = (await screen.findAllByRole("table"))[0]!;
+    expect(within(restoredTable).getAllByText("0 / 0 dokumen")).toHaveLength(3);
   });
 
-  it("filters approved Users by Bidang and Unit and keeps Unit choices independent", async () => {
+  it("searches approved Users by nama and NRP and combines with Bidang and Unit filters", async () => {
     const user = userEvent.setup();
     const seed = defaultMockSeed();
     seedUsersForFilterAndSortTests(seed);
@@ -190,17 +205,27 @@ describe("UserSosialisasiProgressPage", () => {
     await screen.findAllByRole("table");
     const table = () => screen.getAllByRole("table")[0]!;
     expect(within(table()).getAllByText("Belum diisi")).toHaveLength(2);
-    const farahRow = within(table()).getByText("Dr. Farah").closest("tr");
-    expect(farahRow).not.toBeNull();
-    expect(within(farahRow!).getByText("SDM")).toBeInTheDocument();
-    expect(within(farahRow!).getByText("Unit A")).toBeInTheDocument();
+    const searchInput = screen.getByRole("textbox", { name: "Cari nama atau NRP" });
     const bidangFilter = screen.getByRole("combobox", { name: "Filter Bidang" });
     const unitFilter = screen.getByRole("combobox", { name: "Filter Unit" });
+
+    await user.type(searchInput, "ITRA");
+    expect(within(table()).getByText("Citra")).toBeInTheDocument();
+    expect(within(table()).queryByText("Dr. Farah")).not.toBeInTheDocument();
+    await user.clear(searchInput);
+    await user.type(searchInput, "0010");
+    expect(within(table()).getByText("Citra")).toBeInTheDocument();
+    expect(within(table()).queryByText("Dewi")).not.toBeInTheDocument();
+    await user.clear(searchInput);
+
+    await user.type(searchInput, "zzz");
+    expect(screen.getByText("Tidak ada User yang cocok dengan filter atau pencarian.")).toBeInTheDocument();
+    await user.clear(searchInput);
 
     await user.selectOptions(bidangFilter, within(bidangFilter).getByRole("option", { name: "IT" }).getAttribute("value")!);
     expect(within(unitFilter).getByRole("option", { name: "Unit B" })).toBeInTheDocument();
     await user.selectOptions(unitFilter, within(unitFilter).getByRole("option", { name: "Unit B" }).getAttribute("value")!);
-    expect(screen.getByText("Tidak ada User yang cocok dengan filter.")).toBeInTheDocument();
+    expect(screen.getByText("Tidak ada User yang cocok dengan filter atau pencarian.")).toBeInTheDocument();
 
     await user.selectOptions(bidangFilter, "");
     expect(within(table()).getByText("Citra")).toBeInTheDocument();
@@ -218,12 +243,17 @@ describe("UserSosialisasiProgressPage", () => {
     await user.selectOptions(unitFilter, "");
 
     await user.selectOptions(bidangFilter, within(bidangFilter).getByRole("option", { name: "SDM" }).getAttribute("value")!);
-    await user.selectOptions(unitFilter, within(unitFilter).getByRole("option", { name: "Unit B" }).getAttribute("value")!);
-    expect(within(table()).getByText("Citra")).toBeInTheDocument();
-    expect(within(table()).queryByText("Dr. Farah")).not.toBeInTheDocument();
-    await user.selectOptions(unitFilter, "");
+    await user.type(searchInput, "farah");
     expect(within(table()).getByText("Dr. Farah")).toBeInTheDocument();
-    expect(within(table()).queryByText("Citra")).toBeInTheDocument();
+    expect(within(table()).queryByText("Citra")).not.toBeInTheDocument();
+
+    await user.click(within(table()).getByRole("button", { name: "Lihat detail sosialisasi Dr. Farah" }));
+    expect(await screen.findByRole("heading", { name: "Dr. Farah" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Kembali ke Progress Sosialisasi User" }));
+    expect((screen.getByRole("textbox", { name: "Cari nama atau NRP" }) as HTMLInputElement).value).toBe("farah");
+    const restoredTable = (await screen.findAllByRole("table"))[0]!;
+    expect(within(restoredTable).getByText("Dr. Farah")).toBeInTheDocument();
+    expect(within(restoredTable).queryByText("Citra")).not.toBeInTheDocument();
   });
 
   it("sorts Nama, NRP, Bidang, Unit, and Progress in both directions", async () => {

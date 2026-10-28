@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAdapter } from '../adapter/context';
-import { Chip, DataTable, type DataTableColumn, type Notify } from '../components/Shared';
-import { fmtWaktu, isAktif, requireDocId } from '../utils';
+import { DataTable, type DataTableColumn, type Notify } from '../components/Shared';
+import { isAktif, requireDocId } from '../utils';
+import UserSosialisasiDetailPage from './UserSosialisasiDetailPage';
 import type { Dokumen, Sesi, SosialisasiSummaryData } from '../adapter/types';
 
 interface Props {
@@ -13,9 +14,11 @@ interface Props {
 export default function UserSosialisasiProgressPage({ docs, session, notify }: Props) {
   const api = useAdapter();
   const [summary, setSummary] = useState<SosialisasiSummaryData | null>(null);
-  const [expandedNrp, setExpandedNrp] = useState<string | null>(null);
+  const [selectedNrp, setSelectedNrp] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [bidangFilter, setBidangFilter] = useState('');
   const [unitFilter, setUnitFilter] = useState('');
+  const [listPage, setListPage] = useState(0);
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({
     key: 'nama',
     direction: 'asc',
@@ -37,9 +40,14 @@ export default function UserSosialisasiProgressPage({ docs, session, notify }: P
   }), [activeDocs, summary, users]);
   const bidangOptions = useMemo(() => createFilterOptions(rows.map((user) => user.bidang)), [rows]);
   const unitOptions = useMemo(() => createFilterOptions(rows.map((user) => user.unit)), [rows]);
-  const filteredRows = useMemo(() => rows.filter((user) =>
-    matchesFilter(user.bidang, bidangFilter) && matchesFilter(user.unit, unitFilter),
-  ), [rows, bidangFilter, unitFilter]);
+  const filteredRows = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return rows.filter((user) =>
+      (!query || user.nama.toLowerCase().includes(query) || user.nrp.toLowerCase().includes(query)) &&
+      matchesFilter(user.bidang, bidangFilter) &&
+      matchesFilter(user.unit, unitFilter),
+    );
+  }, [rows, searchQuery, bidangFilter, unitFilter]);
   const sortedRows = useMemo(() => [...filteredRows].sort((left, right) => {
     const result = sort.key === 'progress'
       ? left.sudah - right.sudah
@@ -54,31 +62,59 @@ export default function UserSosialisasiProgressPage({ docs, session, notify }: P
       .finally(() => setLoading(false));
   }, [api, session, notify]);
 
+  const selectedUser = users.find((user) => user.nrp === selectedNrp);
+
+  if (selectedUser && summary) {
+    return (
+      <UserSosialisasiDetailPage
+        user={selectedUser}
+        activeDocs={activeDocs}
+        readMap={summary.readMap}
+        onBack={() => setSelectedNrp(null)}
+      />
+    );
+  }
+
   const columns: DataTableColumn<(typeof rows)[number]>[] = [
     { key: 'nama', label: 'Nama', header: sortHeader('Nama', 'nama'), render: (user) => <span className="font-semibold text-gray-200">{user.nama}</span> },
     { key: 'nrp', label: 'NRP', header: sortHeader('NRP', 'nrp'), render: (user) => <span className="font-mono text-xs text-cyan-400">{user.nrp}</span> },
     { key: 'bidang', label: 'Bidang', header: sortHeader('Bidang', 'bidang'), render: (user) => <span>{user.bidang || 'Belum diisi'}</span> },
     { key: 'unit', label: 'Unit', header: sortHeader('Unit', 'unit'), render: (user) => <span>{user.unit || 'Belum diisi'}</span> },
-    { key: 'progress', label: 'Progress', header: sortHeader('Progress', 'progress'), render: (user) => <div className="text-center text-gray-300">{user.sudah} sudah · {user.belum} belum</div> },
     {
-      key: 'rincian',
-      label: 'Rincian',
+      key: 'progress',
+      label: 'Progress',
+      header: sortHeader('Progress', 'progress'),
       render: (user) => {
-        const expanded = expandedNrp === user.nrp;
+        const total = user.sudah + user.belum;
+        const pct = total > 0 ? Math.round((user.sudah / total) * 100) : 0;
         return (
-          <button
-            type="button"
-            aria-expanded={expanded}
-            onClick={() => setExpandedNrp(expanded ? null : user.nrp)}
-            className="text-xs font-bold text-cyan-400 hover:underline"
-          >
-            {expanded ? `Tutup rincian ${user.nama}` : `Lihat rincian ${user.nama}`}
-          </button>
+          <div className="text-center">
+            <span className="text-xs font-bold text-cyan-400">{user.sudah} / {total} dokumen</span>
+            <div className="mx-auto mt-1 h-1.5 w-24 overflow-hidden rounded-full bg-gray-900/60">
+              <div
+                className="h-full rounded-full bg-linear-to-r from-cyan-500 to-emerald-500 transition-all"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
         );
       },
     },
+    {
+      key: 'aksi',
+      label: 'Aksi',
+      render: (user) => (
+        <button
+          type="button"
+          aria-label={`Lihat detail sosialisasi ${user.nama}`}
+          onClick={() => setSelectedNrp(user.nrp)}
+          className="text-xs font-bold text-cyan-400 hover:underline"
+        >
+          Lihat
+        </button>
+      ),
+    },
   ];
-  const expandedUser = users.find((user) => user.nrp === expandedNrp);
 
   return (
     <section className="space-y-4">
@@ -93,7 +129,7 @@ export default function UserSosialisasiProgressPage({ docs, session, notify }: P
         )}
       </header>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-sm text-gray-300">
           Bidang
           <select
@@ -122,6 +158,20 @@ export default function UserSosialisasiProgressPage({ docs, session, notify }: P
             ))}
           </select>
         </label>
+        <label className="relative flex items-center gap-2 text-sm text-gray-300">
+          Cari
+          <div className="relative">
+            <i className="ph ph-magnifying-glass pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
+            <input
+              aria-label="Cari nama atau NRP"
+              type="text"
+              placeholder="Cari nama atau NRP..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              className="w-52 rounded-md border border-gray-600 bg-gray-900 py-2 pl-9 pr-3 text-gray-200"
+            />
+          </div>
+        </label>
       </div>
 
       <DataTable
@@ -129,18 +179,13 @@ export default function UserSosialisasiProgressPage({ docs, session, notify }: P
         rows={sortedRows}
         getRowKey={(user) => user.nrp}
         loading={loading}
-        isFiltered={Boolean(bidangFilter || unitFilter)}
+        page={listPage}
+        onPageChange={setListPage}
+        isFiltered={Boolean(searchQuery.trim() || bidangFilter || unitFilter)}
         emptyMessage="Belum ada User Approved."
-        noResultsMessage="Tidak ada User yang cocok dengan filter."
-        resetKey={`${bidangFilter}\u0000${unitFilter}\u0000${sort.key}\u0000${sort.direction}`}
+        noResultsMessage="Tidak ada User yang cocok dengan filter atau pencarian."
+        resetKey={`${searchQuery}\u0000${bidangFilter}\u0000${unitFilter}\u0000${sort.key}\u0000${sort.direction}`}
       />
-      {summary && expandedUser && (
-        <UserDocumentDetails
-          user={expandedUser}
-          docs={activeDocs}
-          readMap={summary.readMap}
-        />
-      )}
     </section>
   );
 
@@ -194,48 +239,4 @@ function matchesFilter(value: string, filter: string) {
 function getSortValue(user: UserProgressRow, key: Exclude<SortKey, 'progress'>) {
   if (key === 'bidang' || key === 'unit') return user[key].trim();
   return user[key];
-}
-
-function UserDocumentDetails({
-  user,
-  docs,
-  readMap,
-}: {
-  user: UserSummary;
-  docs: Dokumen[];
-  readMap: SosialisasiSummaryData['readMap'];
-}) {
-  const columns: DataTableColumn<Dokumen>[] = [
-    { key: 'judul', label: 'Dokumen Aktif', render: (doc) => <span className="text-gray-200">{doc.judul}</span> },
-    {
-      key: 'status',
-      label: 'Status',
-      render: (doc) => {
-        const confirmed = Object.hasOwn(readMap[requireDocId(doc)] ?? {}, user.nrp);
-        return <div className="text-center"><Chip ok={confirmed}>{confirmed ? 'Sudah Dibaca' : 'Belum Dibaca'}</Chip></div>;
-      },
-    },
-    {
-      key: 'waktu',
-      label: 'Waktu Konfirmasi',
-      render: (doc) => {
-        const time = readMap[requireDocId(doc)] ?? {};
-        return Object.hasOwn(time, user.nrp)
-          ? <time className="text-xs text-gray-400" dateTime={new Date(time[user.nrp]).toISOString()}>{fmtWaktu(time[user.nrp])}</time>
-          : <span className="text-xs text-gray-400">-</span>;
-      },
-    },
-  ];
-
-  return (
-    <section className="space-y-3 rounded-2xl border border-gray-700 bg-gray-800 p-4">
-      <h4 className="font-bold text-gray-200">Rincian Dokumen — {user.nama}</h4>
-      <DataTable
-        columns={columns}
-        rows={docs}
-        getRowKey={(doc) => doc.docId ?? doc.judul}
-        emptyMessage="Tidak ada Dokumen Aktif."
-      />
-    </section>
-  );
 }
