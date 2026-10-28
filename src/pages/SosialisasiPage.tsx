@@ -302,8 +302,8 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
           rows={rows}
           getRowKey={(d) => d.docId ?? d.judul}
           isFiltered={filter.tahun !== 'ALL' || filter.jenis !== 'ALL' || filter.pemilik !== 'ALL' || filter.unit !== 'ALL' || !!filter.q.trim()}
-          emptyMessage="Data Kosong / Tidak Ditemukan"
-          noResultsMessage="Data Kosong / Tidak Ditemukan"
+          emptyMessage="Belum ada data dokumen."
+          noResultsMessage="Tidak ada dokumen yang sesuai dengan filter atau pencarian."
           resetKey={JSON.stringify([filter, sort])}
         />
       </div>

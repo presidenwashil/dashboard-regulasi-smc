@@ -7,6 +7,30 @@ import { createMockBackend } from "../adapter/mock/backend";
 import SosialisasiPage from "./SosialisasiPage";
 
 describe("SosialisasiPage with the mock Adapter", () => {
+  it("distinguishes an empty document source from no filter matches", async () => {
+    const user = userEvent.setup();
+    const api = createApi(createMockBackend());
+    const session = await api.loginUser("0042", "demo-farah");
+    const docs = await api.getAllData(session);
+
+    const { rerender } = render(
+      <AdapterProvider api={api}>
+        <SosialisasiPage docs={[]} session={session} notify={vi.fn()} onEdit={vi.fn()} />
+      </AdapterProvider>,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent("Belum ada data dokumen.");
+
+    rerender(
+      <AdapterProvider api={api}>
+        <SosialisasiPage docs={docs} session={session} notify={vi.fn()} onEdit={vi.fn()} />
+      </AdapterProvider>,
+    );
+    await user.type(screen.getByPlaceholderText("Cari judul dokumen..."), "dokumen yang tidak ada");
+
+    expect(screen.getByRole("status")).toHaveTextContent("Tidak ada dokumen yang sesuai dengan filter atau pencarian.");
+  });
+
   it("renders normalized documents and confirms a read through the Adapter", async () => {
     const user = userEvent.setup();
     const api = createApi(createMockBackend());

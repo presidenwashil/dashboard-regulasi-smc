@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { createApi } from "../adapter";
@@ -21,6 +21,55 @@ function renderApprovalPage(users: ReturnType<typeof defaultMockSeed>["users"]) 
 }
 
 describe("ApprovalPage with the mock Adapter", () => {
+  it("keeps both tables loading until their data arrives", async () => {
+    const backend = createMockBackend();
+    const getPendingUsers = backend.getPendingUsers;
+    const getAllUsers = backend.getAllUsers;
+    let finishPending!: () => void;
+    let finishUsers!: () => void;
+    backend.getPendingUsers = (...args) => new Promise((resolve) => {
+      finishPending = () => resolve(getPendingUsers(...args));
+    });
+    backend.getAllUsers = (...args) => new Promise((resolve) => {
+      finishUsers = () => resolve(getAllUsers(...args));
+    });
+    const api = createApi(backend);
+    const sesi = await api.loginUser("admin01", "demo-ganti-saya");
+
+    render(
+      <AdapterProvider api={api}>
+        <ApprovalPage sesi={sesi} notify={vi.fn()} />
+      </AdapterProvider>,
+    );
+
+    expect(screen.getAllByRole("status")).toHaveLength(2);
+    expect(screen.getAllByRole("status")[0]).toHaveTextContent("Memuat data...");
+    expect(screen.getAllByRole("status")[1]).toHaveTextContent("Memuat data...");
+
+    await act(async () => {
+      finishPending();
+      finishUsers();
+    });
+    await waitFor(() => expect(screen.getAllByRole("table")).toHaveLength(2));
+  });
+
+  it("stops loading and reports errors when a table request fails", async () => {
+    const backend = createMockBackend();
+    backend.getAllUsers = () => ({ success: false, message: "Gagal memuat akun." });
+    const api = createApi(backend);
+    const sesi = await api.loginUser("admin01", "demo-ganti-saya");
+    const notify = vi.fn();
+
+    render(
+      <AdapterProvider api={api}>
+        <ApprovalPage sesi={sesi} notify={notify} />
+      </AdapterProvider>,
+    );
+
+    await waitFor(() => expect(notify).toHaveBeenCalledWith("Gagal memuat akun.", true));
+    expect(screen.queryByText("Memuat data...")).not.toBeInTheDocument();
+  });
+
   it("approves a pending registration and reflects the updated account status", async () => {
     const user = userEvent.setup();
     const api = createApi(createMockBackend());
