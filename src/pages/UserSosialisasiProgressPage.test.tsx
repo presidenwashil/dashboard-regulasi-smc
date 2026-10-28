@@ -4,8 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createApi } from "../adapter";
 import { AdapterProvider } from "../adapter/provider";
 import { createMockBackend } from "../adapter/mock/backend";
-import type { SosialisasiSummaryData } from "../adapter/types";
-import { T_FARAH_READ_1 } from "../adapter/mock/seed";
+import { defaultMockSeed, T_FARAH_READ_1 } from "../adapter/mock/seed";
 import UserSosialisasiProgressPage from "./UserSosialisasiProgressPage";
 
 describe("UserSosialisasiProgressPage", () => {
@@ -21,7 +20,7 @@ describe("UserSosialisasiProgressPage", () => {
       </AdapterProvider>,
     );
 
-    const userTable = (await screen.findAllByRole("table"))[0];
+    const userTable = (await screen.findAllByRole("table"))[0]!;
     const farahRow = within(userTable).getByText("Dr. Farah").closest("tr");
     expect(farahRow).not.toBeNull();
     expect(within(farahRow!).getByText("1 sudah · 1 belum")).toBeInTheDocument();
@@ -35,7 +34,7 @@ describe("UserSosialisasiProgressPage", () => {
     expect(within(userTable).queryByText("Rudi")).not.toBeInTheDocument();
 
     await user.click(within(userTable).getByRole("button", { name: "Lihat rincian Dr. Farah" }));
-    const detailTable = (await screen.findAllByRole("table"))[1];
+    const detailTable = (await screen.findAllByRole("table"))[1]!;
     expect(within(detailTable).getByText("SPO Data Entry Data Casemix")).toBeInTheDocument();
     expect(within(detailTable).getByText("Pedoman Penanganan Risiko Rumah Zakat")).toBeInTheDocument();
     expect(within(detailTable).queryByText("Panduan Terkait PPI")).not.toBeInTheDocument();
@@ -55,45 +54,62 @@ describe("UserSosialisasiProgressPage", () => {
 
   it("paginates users and expanded Dokumen details independently", async () => {
     const user = userEvent.setup();
-    const api = createApi(createMockBackend());
-    const session = await api.loginUser("admin01", "demo-ganti-saya");
-    const docs = await api.getAllData(session);
-    const activeDoc = docs.find((doc) => doc.statusBerlaku === "Aktif")!;
-    const manyDocs = Array.from({ length: 11 }, (_, index) => ({
-      ...activeDoc,
-      docId: 100 + index,
-      judul: `Dokumen ${String(index + 1).padStart(2, "0")}`,
-    }));
-    const manyUsers = Array.from({ length: 12 }, (_, index) => ({
-      nrp: `nrp-${String(index + 1).padStart(2, "0")}`,
-      nama: `User ${String(index + 1).padStart(2, "0")}`,
-    }));
-    api.getSosialisasiSummary = async () => ({
-      totalUser: manyUsers.length,
-      approvedUsers: manyUsers,
-      readMap: { 110: { "nrp-11": T_FARAH_READ_1 } },
+    const seed = defaultMockSeed();
+    const admin = seed.users[0]!;
+    const manyUsers = Array.from({ length: 12 }, (_, index) => {
+      const number = String(index + 1).padStart(2, "0");
+      return {
+        nama: `User ${number}`,
+        profesi: "Perawat",
+        bidang: "IT",
+        unit: "IT",
+        nrp: `nrp-${number}`,
+        password: "demo-user",
+        status: "Approved",
+        role: "User",
+      };
     });
+    const firstDocument = seed.documents[0]!;
+    seed.documents = Array.from({ length: 11 }, (_, index) => {
+      const document = [...firstDocument];
+      document[1] = `Dokumen ${String(index + 1).padStart(2, "0")}`;
+      document[14] = "Aktif";
+      return document;
+    });
+    seed.users = [admin, ...manyUsers];
+    seed.sosialisasi = [{
+      waktu: T_FARAH_READ_1,
+      nrp: "nrp-11",
+      nama: "User 11",
+      docRowIndex: 2,
+      judul: "Dokumen 01",
+    }];
+
+    const api = createApi(createMockBackend(seed));
+    const session = await api.loginUser("admin01", "demo-ganti-saya");
+    seed.users[0]!.status = "Pending";
+    const docs = await api.getAllData(session);
 
     render(
       <AdapterProvider api={api}>
-        <UserSosialisasiProgressPage docs={manyDocs} session={session} notify={vi.fn()} />
+        <UserSosialisasiProgressPage docs={docs} session={session} notify={vi.fn()} />
       </AdapterProvider>,
     );
 
-    const outerTable = (await screen.findAllByRole("table"))[0];
+    const outerTable = (await screen.findAllByRole("table"))[0]!;
     expect(within(outerTable).getByText("User 01")).toBeInTheDocument();
     expect(within(outerTable).queryByText("User 11")).not.toBeInTheDocument();
     const navigation = screen.getAllByRole("navigation", { name: "Navigasi halaman tabel" });
-    await user.click(within(navigation[0]).getByRole("button", { name: "Selanjutnya" }));
+    await user.click(within(navigation[0]!).getByRole("button", { name: "Selanjutnya" }));
     expect(within(outerTable).getByText("User 11")).toBeInTheDocument();
     expect(within(outerTable).getByText("1 sudah · 10 belum")).toBeInTheDocument();
 
     await user.click(within(outerTable).getByRole("button", { name: "Lihat rincian User 11" }));
-    const detailTable = (await screen.findAllByRole("table"))[1];
-    expect(within(detailTable).getByText("Dokumen 01")).toBeInTheDocument();
-    expect(within(detailTable).queryByText("Dokumen 11")).not.toBeInTheDocument();
-    await user.click(within(screen.getAllByRole("navigation", { name: "Navigasi halaman tabel" })[1]).getByRole("button", { name: "Selanjutnya" }));
+    const detailTable = (await screen.findAllByRole("table"))[1]!;
     expect(within(detailTable).getByText("Dokumen 11")).toBeInTheDocument();
+    expect(within(detailTable).queryByText("Dokumen 01")).not.toBeInTheDocument();
+    await user.click(within(screen.getAllByRole("navigation", { name: "Navigasi halaman tabel" })[1]!).getByRole("button", { name: "Selanjutnya" }));
+    expect(within(detailTable).getByText("Dokumen 01")).toBeInTheDocument();
     expect(within(detailTable).getByText("Sudah Dibaca")).toBeInTheDocument();
     expect(within(detailTable).getByRole("time")).toHaveAttribute(
       "dateTime",
@@ -101,28 +117,32 @@ describe("UserSosialisasiProgressPage", () => {
     );
   });
 
-  it("preserves loading and empty details when the summary has no active Dokumen", async () => {
+  it("uses the table loading state before showing empty Dokumen details", async () => {
     const user = userEvent.setup();
-    const api = createApi(createMockBackend());
+    const seed = defaultMockSeed();
+    seed.documents = [];
+    const backend = createMockBackend(seed);
+    const getSummary = backend.getSosialisasiSummary;
+    let releaseSummary!: () => void;
+    backend.getSosialisasiSummary = (...args) => new Promise((resolve) => {
+      releaseSummary = () => resolve(getSummary(...args));
+    });
+    const api = createApi(backend);
     const session = await api.loginUser("admin01", "demo-ganti-saya");
-    let resolveSummary!: (summary: SosialisasiSummaryData) => void;
-    api.getSosialisasiSummary = () => new Promise((resolve) => { resolveSummary = resolve; });
+    const docs = await api.getAllData(session);
 
     render(
       <AdapterProvider api={api}>
-        <UserSosialisasiProgressPage docs={[]} session={session} notify={vi.fn()} />
+        <UserSosialisasiProgressPage docs={docs} session={session} notify={vi.fn()} />
       </AdapterProvider>,
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent("Memuat progress sosialisasi...");
-    await act(async () => resolveSummary({
-      totalUser: 1,
-      approvedUsers: [{ nrp: "0042", nama: "Dr. Farah" }],
-      readMap: {},
-    }));
+    expect(screen.getByRole("status")).toHaveTextContent("Memuat data...");
+    expect(screen.queryByText("Memuat progress sosialisasi...")).not.toBeInTheDocument();
+    await act(async () => releaseSummary());
 
-    expect(screen.getByText("Status dihitung dari konfirmasi baca untuk 0 Dokumen Aktif dan 1 User Approved.")).toBeInTheDocument();
-    const userTable = (await screen.findAllByRole("table"))[0];
+    expect(screen.getByText("Status dihitung dari konfirmasi baca untuk 0 Dokumen Aktif dan 3 User Approved.")).toBeInTheDocument();
+    const userTable = (await screen.findAllByRole("table"))[0]!;
     await user.click(within(userTable).getByRole("button", { name: "Lihat rincian Dr. Farah" }));
     expect(await screen.findByText("Tidak ada Dokumen Aktif.")).toBeInTheDocument();
   });

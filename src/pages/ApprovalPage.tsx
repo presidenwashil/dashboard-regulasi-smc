@@ -40,24 +40,38 @@ export default function ApprovalPage({ sesi, notify }: Props) {
   const [pw, setPw] = useState({ a: '', b: '' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const [p, u] = await Promise.all([api.getPendingUsers(sesi), api.getAllUsers(sesi)]);
-    setPending(p);
-    setUsers(u);
+    setLoading(true);
+    try {
+      const [p, u] = await Promise.all([api.getPendingUsers(sesi), api.getAllUsers(sesi)]);
+      setPending(p);
+      setUsers(u);
+    } finally {
+      setLoading(false);
+    }
   }, [api, sesi]);
+
+  const refresh = useCallback(async () => {
+    try {
+      await load();
+    } catch (e) {
+      notify((e as Error).message, true);
+    }
+  }, [load, notify]);
 
   useEffect(() => {
     // Sinkronisasi dengan server Apps Script. setState terjadi setelah await.
     // oxlint-disable-next-line react/set-state-in-effect
-    load().catch((e: Error) => notify(e.message, true));
-  }, [load, notify]);
+    refresh();
+  }, [refresh]);
 
   const review = async (rowIndex: number, status: 'Approved' | 'Rejected') => {
     try {
       const message = await api.setUserStatus(sesi, rowIndex, status);
       notify(message || 'Status diperbarui.');
-      void load();
+      void refresh();
     } catch (e) {
       notify((e as Error).message, true);
     }
@@ -140,7 +154,7 @@ export default function ApprovalPage({ sesi, notify }: Props) {
           <h3 className="font-bold text-gray-200 flex items-center gap-2 text-lg">
             <i className="ph ph-user-check text-cyan-500 text-2xl" /> Approval Registrasi User
           </h3>
-          <button onClick={() => void load()} className="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 flex items-center gap-1">
+          <button onClick={() => void refresh()} className="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 flex items-center gap-1">
             <i className="ph ph-arrows-clockwise" /> Refresh
           </button>
         </div>
@@ -170,6 +184,7 @@ export default function ApprovalPage({ sesi, notify }: Props) {
           columns={pendingColumns}
           rows={pendingMatches}
           getRowKey={(u) => u.rowIndex}
+          loading={loading}
           isFiltered={!!pendingName || !!pendingNrp}
           emptyMessage="Tidak ada registrasi yang menunggu approval."
           noResultsMessage="Tidak ada registrasi yang sesuai."
@@ -182,7 +197,7 @@ export default function ApprovalPage({ sesi, notify }: Props) {
           <h3 className="font-bold text-gray-200 flex items-center gap-2 text-lg">
             <i className="ph ph-identification-card text-cyan-500 text-2xl" /> Detail Akun / Kelola User
           </h3>
-          <button onClick={() => void load()} className="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 flex items-center gap-1">
+          <button onClick={() => void refresh()} className="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 flex items-center gap-1">
             <i className="ph ph-arrows-clockwise" /> Refresh
           </button>
         </div>
@@ -212,6 +227,7 @@ export default function ApprovalPage({ sesi, notify }: Props) {
           columns={userColumns}
           rows={userMatches}
           getRowKey={(u) => u.rowIndex}
+          loading={loading}
           isFiltered={!!userName || !!userNrp}
           emptyMessage="Belum ada user terdaftar."
           noResultsMessage="Tidak ada akun yang sesuai."

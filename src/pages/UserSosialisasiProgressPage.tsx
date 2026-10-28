@@ -14,6 +14,7 @@ export default function UserSosialisasiProgressPage({ docs, session, notify }: P
   const api = useAdapter();
   const [summary, setSummary] = useState<SosialisasiSummaryData | null>(null);
   const [expandedNrp, setExpandedNrp] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const activeDocs = useMemo(
     () => docs.filter(isAktif),
     [docs],
@@ -32,12 +33,9 @@ export default function UserSosialisasiProgressPage({ docs, session, notify }: P
   useEffect(() => {
     api.getSosialisasiSummary(session)
       .then(setSummary)
-      .catch((error: Error) => notify(error.message, true));
+      .catch((error: Error) => notify(error.message, true))
+      .finally(() => setLoading(false));
   }, [api, session, notify]);
-
-  if (!summary) {
-    return <div role="status" className="p-8 text-center text-cyan-400">Memuat progress sosialisasi...</div>;
-  }
 
   const columns: DataTableColumn<(typeof rows)[number]>[] = [
     { key: 'nama', label: 'User', render: (user) => <span className="font-semibold text-gray-200">{user.nama}</span> },
@@ -69,18 +67,21 @@ export default function UserSosialisasiProgressPage({ docs, session, notify }: P
         <h3 className="font-bold text-gray-200 flex items-center gap-2 text-lg">
           <i className="ph ph-users-three text-cyan-500 text-2xl" /> Progress Sosialisasi per User
         </h3>
-        <p className="text-xs text-gray-400 mt-1">
-          Status dihitung dari konfirmasi baca untuk {activeDocs.length} Dokumen Aktif dan {users.length} User Approved.
-        </p>
+        {summary && (
+          <p className="text-xs text-gray-400 mt-1">
+            Status dihitung dari konfirmasi baca untuk {activeDocs.length} Dokumen Aktif dan {users.length} User Approved.
+          </p>
+        )}
       </header>
 
       <DataTable
         columns={columns}
         rows={rows}
         getRowKey={(user) => user.nrp}
+        loading={loading}
         emptyMessage="Belum ada User Approved."
       />
-      {expandedUser && (
+      {summary && expandedUser && (
         <UserDocumentDetails
           user={expandedUser}
           docs={activeDocs}

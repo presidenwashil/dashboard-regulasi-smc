@@ -4,27 +4,42 @@ import { describe, expect, it, vi } from "vitest";
 import { createApi } from "../adapter";
 import { AdapterProvider } from "../adapter/provider";
 import { createMockBackend } from "../adapter/mock/backend";
-import type { Sesi, SosialisasiDetailData, SosialisasiPerson } from "../adapter/types";
+import { defaultMockSeed, T_FARAH_READ_1 } from "../adapter/mock/seed";
+import type { MockSeed } from "../adapter/mock/seed";
 import SosialisasiDetailPage from "./SosialisasiDetailPage";
 
-const sesi: Sesi = {
-  user: { nama: "Admin", profesi: "Admin", bidang: "IT", unit: "IT", nrp: "admin", role: "Admin" },
-  token: "admin-session",
-};
-
-function makePeople(prefix: string, count: number, hasReadTime: boolean): SosialisasiPerson[] {
-  return Array.from({ length: count }, (_, index) => ({
-    nama: `${prefix} ${index + 1}`,
-    nrp: `${prefix.toUpperCase()}-${index + 1}`,
-    bidang: "IT",
-    unit: "IT",
-    ...(hasReadTime ? { waktu: 1_700_000_000_000 + index } : {}),
+function detailSeed(): MockSeed {
+  const seed = defaultMockSeed();
+  const admin = seed.users[0]!;
+  const readers = Array.from({ length: 24 }, (_, index) => {
+    const number = String(index + 1).padStart(2, "0");
+    return {
+      nama: `${index < 12 ? "Pembaca" : "Belum"} ${index < 12 ? index + 1 : index - 11}`,
+      profesi: "Perawat",
+      bidang: "IT",
+      unit: "IT",
+      nrp: `reader-${number}`,
+      password: "demo-reader",
+      status: "Approved",
+      role: "User",
+    };
+  });
+  seed.users = [admin, ...readers];
+  seed.sosialisasi = readers.slice(0, 12).map((reader, index) => ({
+    waktu: T_FARAH_READ_1 + 11 - index,
+    nrp: reader.nrp,
+    nama: reader.nama,
+    docRowIndex: 2,
+    judul: String(seed.documents[0]![1]),
   }));
+  return seed;
 }
 
-function renderDetail(data: SosialisasiDetailData) {
-  const api = createApi(createMockBackend());
-  vi.spyOn(api, "getSosialisasiDetail").mockResolvedValue(data);
+async function renderDetail(seed: MockSeed, afterLogin?: () => void) {
+  const api = createApi(createMockBackend(seed));
+  const sesi = await api.loginUser("admin01", "demo-ganti-saya");
+  seed.users[0]!.status = "Pending";
+  afterLogin?.();
   const onBack = vi.fn();
 
   render(
@@ -39,14 +54,7 @@ function renderDetail(data: SosialisasiDetailData) {
 describe("SosialisasiDetailPage", () => {
   it("paginates both reader tabs and keeps their data and status columns distinct", async () => {
     const user = userEvent.setup();
-    const data: SosialisasiDetailData = {
-      judul: "Panduan Uji",
-      nomor: "DOC-01",
-      totalUser: 24,
-      sudah: makePeople("Pembaca", 12, true),
-      belum: makePeople("Belum", 12, false),
-    };
-    renderDetail(data);
+    await renderDetail(detailSeed());
 
     let table = await screen.findByRole("table");
     expect(within(table).getByText("Pembaca 1")).toBeInTheDocument();
@@ -55,7 +63,7 @@ describe("SosialisasiDetailPage", () => {
     expect(within(table).getByRole("columnheader", { name: "Waktu Baca" })).toBeInTheDocument();
     const firstReaderRow = within(table).getByText("Pembaca 1").closest("tr");
     expect(firstReaderRow).not.toBeNull();
-    expect(within(firstReaderRow!).getByText(/2023/)).toBeInTheDocument();
+    expect(within(firstReaderRow!).getByText(/2025/)).toBeInTheDocument();
     expect(screen.getByText("Menampilkan 1 - 10 dari total 12 data")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Selanjutnya/ }));
@@ -77,14 +85,12 @@ describe("SosialisasiDetailPage", () => {
     expect(within(screen.getByRole("table")).getByText("Belum 11")).toBeInTheDocument();
   });
 
-  it("shows the existing empty message for each reader tab and keeps the back action", async () => {
+  it("shows each empty reader message when there are no Approved Users and keeps the back action", async () => {
     const user = userEvent.setup();
-    const { onBack } = renderDetail({
-      judul: "Panduan Uji",
-      nomor: "DOC-01",
-      totalUser: 0,
-      sudah: [],
-      belum: [],
+    const seed = detailSeed();
+    const { onBack } = await renderDetail(seed, () => {
+      seed.users = [];
+      seed.sosialisasi = [];
     });
 
     expect(await screen.findByRole("status")).toHaveTextContent("Belum ada yang membaca.");
