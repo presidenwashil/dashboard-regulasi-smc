@@ -14,13 +14,19 @@ export default function UserSosialisasiProgressPage({ docs, session, notify }: P
   const api = useAdapter();
   const [summary, setSummary] = useState<SosialisasiSummaryData | null>(null);
   const [expandedNrp, setExpandedNrp] = useState<string | null>(null);
+  const [bidangFilter, setBidangFilter] = useState('');
+  const [unitFilter, setUnitFilter] = useState('');
+  const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({
+    key: 'nama',
+    direction: 'asc',
+  });
   const [loading, setLoading] = useState(true);
   const activeDocs = useMemo(
     () => docs.filter(isAktif),
     [docs],
   );
   const users = useMemo(
-    () => summary ? [...summary.approvedUsers].sort((a, b) => a.nama.localeCompare(b.nama, 'id')) : [],
+    () => summary?.approvedUsers ?? [],
     [summary],
   );
   const rows = useMemo(() => users.map((user) => {
@@ -29,6 +35,17 @@ export default function UserSosialisasiProgressPage({ docs, session, notify }: P
     ).length;
     return { ...user, sudah, belum: activeDocs.length - sudah };
   }), [activeDocs, summary, users]);
+  const bidangOptions = useMemo(() => createFilterOptions(rows.map((user) => user.bidang)), [rows]);
+  const unitOptions = useMemo(() => createFilterOptions(rows.map((user) => user.unit)), [rows]);
+  const filteredRows = useMemo(() => rows.filter((user) =>
+    matchesFilter(user.bidang, bidangFilter) && matchesFilter(user.unit, unitFilter),
+  ), [rows, bidangFilter, unitFilter]);
+  const sortedRows = useMemo(() => [...filteredRows].sort((left, right) => {
+    const result = sort.key === 'progress'
+      ? left.sudah - right.sudah
+      : getSortValue(left, sort.key).localeCompare(getSortValue(right, sort.key), 'id');
+    return sort.direction === 'asc' ? result : -result;
+  }), [filteredRows, sort]);
 
   useEffect(() => {
     api.getSosialisasiSummary(session)
@@ -38,9 +55,11 @@ export default function UserSosialisasiProgressPage({ docs, session, notify }: P
   }, [api, session, notify]);
 
   const columns: DataTableColumn<(typeof rows)[number]>[] = [
-    { key: 'nama', label: 'User', render: (user) => <span className="font-semibold text-gray-200">{user.nama}</span> },
-    { key: 'nrp', label: 'NRP', render: (user) => <span className="font-mono text-xs text-cyan-400">{user.nrp}</span> },
-    { key: 'progress', label: 'Progress', render: (user) => <div className="text-center text-gray-300">{user.sudah} sudah · {user.belum} belum</div> },
+    { key: 'nama', label: 'Nama', header: sortHeader('Nama', 'nama'), render: (user) => <span className="font-semibold text-gray-200">{user.nama}</span> },
+    { key: 'nrp', label: 'NRP', header: sortHeader('NRP', 'nrp'), render: (user) => <span className="font-mono text-xs text-cyan-400">{user.nrp}</span> },
+    { key: 'bidang', label: 'Bidang', header: sortHeader('Bidang', 'bidang'), render: (user) => <span>{user.bidang || 'Belum diisi'}</span> },
+    { key: 'unit', label: 'Unit', header: sortHeader('Unit', 'unit'), render: (user) => <span>{user.unit || 'Belum diisi'}</span> },
+    { key: 'progress', label: 'Progress', header: sortHeader('Progress', 'progress'), render: (user) => <div className="text-center text-gray-300">{user.sudah} sudah · {user.belum} belum</div> },
     {
       key: 'rincian',
       label: 'Rincian',
@@ -74,12 +93,46 @@ export default function UserSosialisasiProgressPage({ docs, session, notify }: P
         )}
       </header>
 
+      <div className="flex flex-wrap gap-3">
+        <label className="flex items-center gap-2 text-sm text-gray-300">
+          Bidang
+          <select
+            aria-label="Filter Bidang"
+            className="rounded-md border border-gray-600 bg-gray-900 px-3 py-2 text-gray-200"
+            value={bidangFilter}
+            onChange={(event) => setBidangFilter(event.target.value)}
+          >
+            <option value="">Semua</option>
+            {bidangOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm text-gray-300">
+          Unit
+          <select
+            aria-label="Filter Unit"
+            className="rounded-md border border-gray-600 bg-gray-900 px-3 py-2 text-gray-200"
+            value={unitFilter}
+            onChange={(event) => setUnitFilter(event.target.value)}
+          >
+            <option value="">Semua</option>
+            {unitOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
       <DataTable
         columns={columns}
-        rows={rows}
+        rows={sortedRows}
         getRowKey={(user) => user.nrp}
         loading={loading}
+        isFiltered={Boolean(bidangFilter || unitFilter)}
         emptyMessage="Belum ada User Approved."
+        noResultsMessage="Tidak ada User yang cocok dengan filter."
+        resetKey={`${bidangFilter}\u0000${unitFilter}\u0000${sort.key}\u0000${sort.direction}`}
       />
       {summary && expandedUser && (
         <UserDocumentDetails
@@ -90,9 +143,58 @@ export default function UserSosialisasiProgressPage({ docs, session, notify }: P
       )}
     </section>
   );
+
+  function sortHeader(label: string, key: SortKey) {
+    const active = sort.key === key;
+    return (
+      <button
+        type="button"
+        aria-label={label}
+        aria-pressed={active}
+        className="inline-flex items-center gap-1 text-left font-semibold hover:text-cyan-300"
+        onClick={() => setSort((current) => ({
+          key,
+          direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
+        }))}
+      >
+        {label}
+        <span aria-hidden="true">{active ? (sort.direction === 'asc' ? '↑' : '↓') : '↕'}</span>
+      </button>
+    );
+  }
 }
 
 type UserSummary = SosialisasiSummaryData['approvedUsers'][number];
+type SortKey = 'nama' | 'nrp' | 'bidang' | 'unit' | 'progress';
+type SortDirection = 'asc' | 'desc';
+type UserProgressRow = UserSummary & { sudah: number; belum: number };
+
+const MISSING_FILTER = '__missing__';
+const VALUE_FILTER_PREFIX = 'value:';
+
+function createFilterOptions(values: string[]) {
+  const distinctValues = [...new Set(values.map((value) => value.trim()).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right, 'id'));
+  const options = distinctValues.map((value) => ({
+    value: `${VALUE_FILTER_PREFIX}${value}`,
+    label: value,
+  }));
+  if (values.some((value) => !value.trim())) {
+    options.push({ value: MISSING_FILTER, label: 'Belum diisi' });
+  }
+  return options;
+}
+
+function matchesFilter(value: string, filter: string) {
+  if (!filter) return true;
+  if (filter === MISSING_FILTER) return !value.trim();
+  return value.trim() === filter.slice(VALUE_FILTER_PREFIX.length);
+}
+
+function getSortValue(user: UserProgressRow, key: Exclude<SortKey, 'progress'>) {
+  if (key === 'bidang' || key === 'unit') return user[key].trim();
+  return user[key];
+}
 
 function UserDocumentDetails({
   user,

@@ -54,7 +54,12 @@ function getSosialisasiSummary(token) {
     var approvedUsers = [];
     for (var i = 1; i < userRows.length; i++) {
       if (userRows[i][8] === 'Approved') {
-        approvedUsers.push({ nrp: userRows[i][5], nama: userRows[i][1] });
+        approvedUsers.push({
+          nrp: userRows[i][5],
+          nama: userRows[i][1],
+          bidang: userRows[i][3],
+          unit: userRows[i][4]
+        });
       }
     }
 
