@@ -78,6 +78,7 @@ export function Pagination({ page, perPage, total, onPage }: PaginationProps) {
 export interface DataTableColumn<T> {
   key: string;
   label: string;
+  header?: ReactNode;
   render: (row: T) => ReactNode;
 }
 
@@ -89,6 +90,7 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   noResultsMessage?: string;
   loading?: boolean;
+  resetKey?: unknown;
 }
 
 const DATA_TABLE_PAGE_SIZES = [10, 20, 50] as const;
@@ -101,18 +103,21 @@ export function DataTable<T>({
   emptyMessage = 'Belum ada data.',
   noResultsMessage = 'Tidak ada data yang sesuai.',
   loading = false,
+  resetKey,
 }: DataTableProps<T>) {
   const [page, setPage] = useState(0);
   const [perPage, setPerPage] = useState<number>(DATA_TABLE_PAGE_SIZES[0]);
   const previousRows = useRef(rows);
+  const previousResetKey = useRef(resetKey);
 
   useEffect(() => {
     const sameRows =
       previousRows.current.length === rows.length &&
       previousRows.current.every((row, index) => Object.is(row, rows[index]));
-    if (!sameRows) setPage(0);
+    if (!sameRows || !Object.is(previousResetKey.current, resetKey)) setPage(0);
     previousRows.current = rows;
-  }, [rows]);
+    previousResetKey.current = resetKey;
+  }, [rows, resetKey]);
 
   const totalPages = Math.ceil(rows.length / perPage);
   const visibleRows = rows.slice(page * perPage, (page + 1) * perPage);
@@ -148,7 +153,7 @@ export function DataTable<T>({
           <thead className="bg-gray-800 text-xs uppercase text-gray-400">
             <tr>
               {columns.map((column) => (
-                <th key={column.key} scope="col" className="px-4 py-3">{column.label}</th>
+                <th key={column.key} scope="col" className="px-4 py-3">{column.header ?? column.label}</th>
               ))}
             </tr>
           </thead>
@@ -169,7 +174,7 @@ export function DataTable<T>({
           <div key={getRowKey(row)} role="listitem" className="space-y-3 bg-gray-900/40 p-4">
             {columns.map((column) => (
               <div key={column.key}>
-                <div className="mb-1 text-xs font-semibold uppercase text-gray-400">{column.label}</div>
+                <div className="mb-1 text-xs font-semibold uppercase text-gray-400">{column.header ?? column.label}</div>
                 <div className="text-sm text-gray-200">{column.render(row)}</div>
               </div>
             ))}
