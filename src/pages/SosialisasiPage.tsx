@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAdapter } from '../adapter/context';
-import { Chip, ICON_BTN, Modal, Pagination, type Notify } from '../components/Shared';
-import { ITEMS_PER_PAGE, isAktif, requireDocId, yearOf } from '../utils';
+import { Chip, DataTable, ICON_BTN, Modal, type DataTableColumn, type Notify } from '../components/Shared';
+import { isAktif, requireDocId, yearOf } from '../utils';
 import SosialisasiDetailPage from './SosialisasiDetailPage';
 import type { Dokumen, Sesi, SosialisasiSummaryData } from '../adapter/types';
 
@@ -35,7 +35,6 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
   const [summary, setSummary] = useState<SosialisasiSummaryData | null>(null);
   const [filter, setFilter] = useState<Filter>(EMPTY_FILTER);
   const [sort, setSort] = useState<{ col: SortCol | ''; asc: boolean }>({ col: '', asc: true });
-  const [page, setPage] = useState(0);
   const [confirmDoc, setConfirmDoc] = useState<Dokumen | null>(null);
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -50,7 +49,6 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
 
   const updateFilter = (patch: Partial<Filter>) => {
     setFilter((f) => ({ ...f, ...patch }));
-    setPage(0);
   };
 
   useEffect(() => {
@@ -101,22 +99,18 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
 
   const aktifRows = rows.filter(isAktif);
   const sudahCount = aktifRows.filter((d) => d.docId !== undefined && readIds.includes(d.docId)).length;
-  const pageRows = rows.slice(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE);
 
   const toggleSort = (col: SortCol) => {
     setSort((s) => (s.col === col ? { col, asc: !s.asc } : { col, asc: true }));
-    setPage(0);
   };
 
-  const thSort = (col: SortCol, label: string, cls = '') => (
-    <th onClick={() => toggleSort(col)} className={`p-4 cursor-pointer hover:text-cyan-400 transition-colors select-none ${cls}`}>
-      <span className="inline-flex items-center gap-1">
+  const sortHeader = (col: SortCol, label: string) => (
+    <button type="button" onClick={() => toggleSort(col)} className="inline-flex items-center gap-1 hover:text-cyan-400 transition-colors select-none">
         {label}
         <i className={`ph ${
           sort.col === col ? (sort.asc ? 'ph-caret-up text-cyan-400' : 'ph-caret-down text-cyan-400') : 'ph-caret-up opacity-0'
         }`} />
-      </span>
-    </th>
+    </button>
   );
 
   const markRead = async () => {
@@ -142,6 +136,127 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
     ['jenis', 'Jenis Dokumen', 'Semua Jenis'],
     ['pemilik', 'Pemilik', 'Semua Pemilik'],
     ['unit', 'Sub Unit', 'Semua Unit'],
+  ];
+  const columns: DataTableColumn<Dokumen>[] = [
+    {
+      key: 'judul',
+      label: 'Judul Dokumen',
+      header: sortHeader('judul', 'Judul Dokumen'),
+      render: (d) => (
+        <div>
+          <div className="font-bold text-gray-200 line-clamp-2 max-w-xs">{d.judul}</div>
+          {isAktif(d) ? (
+            <span className="mt-1 inline-block bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 px-2 py-0.5 rounded text-[10px] font-bold">
+              Aktif Berlaku
+            </span>
+          ) : (
+            <span className="mt-1 inline-block bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-0.5 rounded text-[10px] font-bold uppercase">
+              {d.statusBerlaku}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'jenis',
+      label: 'Jenis',
+      header: sortHeader('jenis', 'Jenis'),
+      render: (d) => <span className="bg-gray-700 px-2 py-1 rounded text-xs text-gray-300">{d.jenis || '-'}</span>,
+    },
+    {
+      key: 'nomor',
+      label: 'Nomor',
+      header: sortHeader('nomor', 'Nomor'),
+      render: (d) => <span className="font-mono text-xs text-cyan-400">{d.nomor || '-'}</span>,
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      header: sortHeader('status', 'Status'),
+      render: (d) => {
+        const statusDokumen = d.statusDokumen ?? '-';
+        const isBaru = statusDokumen.toUpperCase() === 'BARU';
+        return (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold text-xs border ${
+            isBaru ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50' : 'bg-amber-500/20 text-amber-400 border-amber-500/50'
+          }`}>
+            {statusDokumen}
+            {statusDokumen.toUpperCase() === 'REVISI' && <span className="ml-1 text-[10px] bg-gray-700 px-1 rounded">V.{d.revisi ?? ''}</span>}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'tahun',
+      label: 'Tahun',
+      header: sortHeader('tahun', 'Tahun'),
+      render: (d) => <span className="text-gray-300 font-semibold text-sm">{yearOf(d) ?? '-'}</span>,
+    },
+    {
+      key: 'statusSaya',
+      label: 'Status Saya',
+      render: (d) => {
+        const aktif = isAktif(d);
+        const sudah = d.docId !== undefined && readIds.includes(d.docId);
+        return !aktif ? (
+          <span className="text-gray-500 text-xs italic">-</span>
+        ) : (
+          <Chip ok={sudah}>{sudah ? 'Sudah Dibaca' : 'Belum Dibaca'}</Chip>
+        );
+      },
+    },
+    ...(isAdmin ? [{
+      key: 'progres',
+      label: 'Progres Sosialisasi',
+      render: (d: Dokumen) => {
+        const aktif = isAktif(d);
+        const totalRead = d.docId === undefined ? 0 : Object.keys(summary?.readMap?.[d.docId] ?? {}).length;
+        return aktif && summary ? (
+          <button onClick={() => d.docId !== undefined && setDetailRow(d.docId)} className="text-xs font-bold text-cyan-400 hover:underline whitespace-nowrap">
+            {totalRead} / {summary.totalUser} karyawan
+          </button>
+        ) : (
+          <span className="text-gray-500 text-xs">-</span>
+        );
+      },
+    }] : []),
+    {
+      key: 'aksi',
+      label: 'Aksi',
+      render: (d) => {
+        const aktif = isAktif(d);
+        const sudah = d.docId !== undefined && readIds.includes(d.docId);
+        return (
+          <div className="flex items-center justify-center gap-1.5 opacity-80 group-hover/row:opacity-100 transition-opacity">
+            {d.pdfUrl && (
+              <a href={d.pdfUrl} target="_blank" rel="noreferrer" title="Lihat PDF"
+                className={`${ICON_BTN} text-red-400 hover:text-red-300 hover:border-red-400`}>
+                <i className="ph ph-file-pdf text-xl" />
+              </a>
+            )}
+            {d.wordUrl && (
+              <a href={d.wordUrl} target="_blank" rel="noreferrer" title="Lihat Word"
+                className={`${ICON_BTN} text-blue-400 hover:text-blue-300 hover:border-blue-400`}>
+                <i className="ph ph-file-doc text-xl" />
+              </a>
+            )}
+            <button onClick={() => onEdit(d)} title="Edit Data Dokumen"
+              className={`${ICON_BTN} text-emerald-400 hover:text-emerald-300 hover:border-emerald-400`}>
+              <i className="ph ph-pencil-simple text-xl" />
+            </button>
+            {aktif && !sudah && (
+              <button
+                onClick={() => { setAgree(false); setConfirmDoc(d); }}
+                title="Tandai Sudah Dibaca"
+                className="bg-cyan-600 hover:bg-cyan-500 text-white p-1.5 rounded-lg"
+              >
+                <i className="ph ph-check-circle text-base" />
+              </button>
+            )}
+          </div>
+        );
+      },
+    },
   ];
 
   return (
@@ -182,115 +297,15 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
       </div>
 
       <div className="bg-gray-800 rounded-2xl shadow-lg overflow-hidden border border-gray-700">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-275">
-            <thead className="bg-gray-800 text-gray-400 text-xs uppercase tracking-wider font-bold border-b border-gray-700">
-              <tr>
-                {thSort('judul', 'Judul Dokumen')}
-                {thSort('jenis', 'Jenis', 'text-center')}
-                {thSort('nomor', 'Nomor')}
-                {thSort('status', 'Status', 'text-center')}
-                {thSort('tahun', 'Tahun', 'text-center')}
-                <th className="p-4 text-center whitespace-nowrap w-40">Status Saya</th>
-                {isAdmin && <th className="p-4 text-center whitespace-nowrap w-44">Progres Sosialisasi</th>}
-                <th className="p-4 text-center whitespace-nowrap">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="text-sm divide-y divide-gray-700">
-              {pageRows.length === 0 && (
-                <tr>
-                  <td colSpan={isAdmin ? 8 : 7} className="p-8 text-center text-gray-500 font-medium">
-                    Data Kosong / Tidak Ditemukan
-                  </td>
-                </tr>
-              )}
-              {pageRows.map((d) => {
-                const aktif = isAktif(d);
-                const sudah = d.docId !== undefined && readIds.includes(d.docId);
-                const totalRead = d.docId === undefined ? 0 : Object.keys(summary?.readMap?.[d.docId] ?? {}).length;
-                const statusDokumen = d.statusDokumen ?? '-';
-                const isBaru = statusDokumen.toUpperCase() === 'BARU';
-                return (
-                  <tr key={d.docId ?? d.judul} className="hover:bg-gray-700/50 transition-colors group/row">
-                    <td className="p-4">
-                      <div className="font-bold text-gray-200 line-clamp-2 max-w-xs">{d.judul}</div>
-                      {aktif ? (
-                        <span className="mt-1 inline-block bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 px-2 py-0.5 rounded text-[10px] font-bold">
-                          Aktif Berlaku
-                        </span>
-                      ) : (
-                        <span className="mt-1 inline-block bg-red-500/20 text-red-400 border border-red-500/50 px-2 py-0.5 rounded text-[10px] font-bold uppercase">
-                          {d.statusBerlaku}
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-4 text-center">
-                      <span className="bg-gray-700 px-2 py-1 rounded text-xs text-gray-300">{d.jenis || '-'}</span>
-                    </td>
-                    <td className="p-4 font-mono text-xs text-cyan-400">{d.nomor || '-'}</td>
-                    <td className="p-4 text-center">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold text-xs border ${
-                        isBaru ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50' : 'bg-amber-500/20 text-amber-400 border-amber-500/50'
-                      }`}>
-                        {statusDokumen}
-                        {statusDokumen.toUpperCase() === 'REVISI' && <span className="ml-1 text-[10px] bg-gray-700 px-1 rounded">V.{d.revisi ?? ''}</span>}
-                      </span>
-                    </td>
-                    <td className="p-4 text-center text-gray-300 font-semibold text-sm">{yearOf(d) ?? '-'}</td>
-                    <td className="p-4 text-center">
-                      {!aktif ? (
-                        <span className="text-gray-500 text-xs italic">-</span>
-                      ) : (
-                        <Chip ok={sudah}>{sudah ? 'Sudah Dibaca' : 'Belum Dibaca'}</Chip>
-                      )}
-                    </td>
-                    {isAdmin && (
-                      <td className="p-4 text-center">
-                        {aktif && summary ? (
-                          <button onClick={() => d.docId !== undefined && setDetailRow(d.docId)} className="text-xs font-bold text-cyan-400 hover:underline whitespace-nowrap">
-                            {totalRead} / {summary.totalUser} karyawan
-                          </button>
-                        ) : (
-                          <span className="text-gray-500 text-xs">-</span>
-                        )}
-                      </td>
-                    )}
-                    <td className="p-4 text-center">
-                      <div className="flex items-center justify-center gap-1.5 opacity-80 group-hover/row:opacity-100 transition-opacity">
-                        {d.pdfUrl && (
-                          <a href={d.pdfUrl} target="_blank" rel="noreferrer" title="Lihat PDF"
-                            className={`${ICON_BTN} text-red-400 hover:text-red-300 hover:border-red-400`}>
-                            <i className="ph ph-file-pdf text-xl" />
-                          </a>
-                        )}
-                        {d.wordUrl && (
-                          <a href={d.wordUrl} target="_blank" rel="noreferrer" title="Lihat Word"
-                            className={`${ICON_BTN} text-blue-400 hover:text-blue-300 hover:border-blue-400`}>
-                            <i className="ph ph-file-doc text-xl" />
-                          </a>
-                        )}
-                        <button onClick={() => onEdit(d)} title="Edit Data Dokumen"
-                          className={`${ICON_BTN} text-emerald-400 hover:text-emerald-300 hover:border-emerald-400`}>
-                          <i className="ph ph-pencil-simple text-xl" />
-                        </button>
-                        {aktif && !sudah && (
-                          <button
-                            onClick={() => { setAgree(false); setConfirmDoc(d); }}
-                            title="Tandai Sudah Dibaca"
-                            className="bg-cyan-600 hover:bg-cyan-500 text-white p-1.5 rounded-lg"
-                          >
-                            <i className="ph ph-check-circle text-base" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <Pagination page={page} perPage={ITEMS_PER_PAGE} total={rows.length} onPage={setPage} />
-        </div>
+        <DataTable
+          columns={columns}
+          rows={rows}
+          getRowKey={(d) => d.docId ?? d.judul}
+          isFiltered={filter.tahun !== 'ALL' || filter.jenis !== 'ALL' || filter.pemilik !== 'ALL' || filter.unit !== 'ALL' || !!filter.q.trim()}
+          emptyMessage="Data Kosong / Tidak Ditemukan"
+          noResultsMessage="Data Kosong / Tidak Ditemukan"
+          resetKey={JSON.stringify([filter, sort])}
+        />
       </div>
 
       <Modal open={!!confirmDoc} onClose={() => setConfirmDoc(null)} maxW="max-w-lg">
