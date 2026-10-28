@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useAdapter } from '../adapter/context';
-import { Modal, Pagination, type Notify } from '../components/Shared';
+import { DataTable, Modal, type DataTableColumn, type Notify } from '../components/Shared';
 import type { AdminUser, PendingUser, Sesi } from '../adapter/types';
-
-const PER_PAGE = 10;
 
 function filterByNameAndNrp<T extends { nama: string; nrp: string }>(
   users: T[],
@@ -34,8 +32,6 @@ export default function ApprovalPage({ sesi, notify }: Props) {
   const api = useAdapter();
   const [pending, setPending] = useState<PendingUser[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [pPage, setPPage] = useState(0);
-  const [uPage, setUPage] = useState(0);
   const [pendingName, setPendingName] = useState('');
   const [pendingNrp, setPendingNrp] = useState('');
   const [userName, setUserName] = useState('');
@@ -44,24 +40,38 @@ export default function ApprovalPage({ sesi, notify }: Props) {
   const [pw, setPw] = useState({ a: '', b: '' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const [p, u] = await Promise.all([api.getPendingUsers(sesi), api.getAllUsers(sesi)]);
-    setPending(p);
-    setUsers(u);
+    setLoading(true);
+    try {
+      const [p, u] = await Promise.all([api.getPendingUsers(sesi), api.getAllUsers(sesi)]);
+      setPending(p);
+      setUsers(u);
+    } finally {
+      setLoading(false);
+    }
   }, [api, sesi]);
+
+  const refresh = useCallback(async () => {
+    try {
+      await load();
+    } catch (e) {
+      notify((e as Error).message, true);
+    }
+  }, [load, notify]);
 
   useEffect(() => {
     // Sinkronisasi dengan server Apps Script. setState terjadi setelah await.
     // oxlint-disable-next-line react/set-state-in-effect
-    load().catch((e: Error) => notify(e.message, true));
-  }, [load, notify]);
+    refresh();
+  }, [refresh]);
 
   const review = async (rowIndex: number, status: 'Approved' | 'Rejected') => {
     try {
       const message = await api.setUserStatus(sesi, rowIndex, status);
       notify(message || 'Status diperbarui.');
-      void load();
+      void refresh();
     } catch (e) {
       notify((e as Error).message, true);
     }
@@ -86,10 +96,56 @@ export default function ApprovalPage({ sesi, notify }: Props) {
 
   const pendingMatches = filterByNameAndNrp(pending, pendingName, pendingNrp);
   const userMatches = filterByNameAndNrp(users, userName, userNrp);
-  const pp = Math.min(pPage, Math.max(0, Math.ceil(pendingMatches.length / PER_PAGE) - 1));
-  const up = Math.min(uPage, Math.max(0, Math.ceil(userMatches.length / PER_PAGE) - 1));
-  const pendingRows = pendingMatches.slice(pp * PER_PAGE, (pp + 1) * PER_PAGE);
-  const userRows = userMatches.slice(up * PER_PAGE, (up + 1) * PER_PAGE);
+
+  const pendingColumns: DataTableColumn<PendingUser>[] = [
+    { key: 'nama', label: 'Nama', render: (u) => <span className="font-semibold text-gray-200">{u.nama}</span> },
+    { key: 'profesi', label: 'Profesi', render: (u) => <span className="text-gray-400">{u.profesi}</span> },
+    { key: 'bidang', label: 'Bidang', render: (u) => <span className="text-gray-400">{u.bidang}</span> },
+    { key: 'unit', label: 'Unit', render: (u) => <span className="text-gray-400">{u.unit}</span> },
+    { key: 'nrp', label: 'NRP', render: (u) => <span className="font-mono text-cyan-400">{u.nrp}</span> },
+    {
+      key: 'actions',
+      label: 'Aksi',
+      render: (u) => (
+        <div className="flex justify-center gap-2">
+          <button onClick={() => void review(u.rowIndex, 'Approved')} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">Setujui</button>
+          <button onClick={() => void review(u.rowIndex, 'Rejected')} className="bg-red-600 hover:bg-red-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">Tolak</button>
+        </div>
+      ),
+    },
+  ];
+  const userColumns: DataTableColumn<AdminUser>[] = [
+    { key: 'nama', label: 'Nama', render: (u) => <span className="font-semibold text-gray-200">{u.nama}</span> },
+    { key: 'nrp', label: 'NRP', render: (u) => <span className="font-mono text-xs text-cyan-400">{u.nrp}</span> },
+    { key: 'bidang', label: 'Bidang', render: (u) => <span className="text-gray-400">{u.bidang}</span> },
+    { key: 'unit', label: 'Unit', render: (u) => <span className="text-gray-400">{u.unit}</span> },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (u) => <span className={`inline-flex whitespace-nowrap border px-2.5 py-1 rounded-full text-xs font-bold ${statusCls(u.status)}`}>{u.status}</span>,
+    },
+    {
+      key: 'role',
+      label: 'Role',
+      render: (u) => (
+        <span className={`inline-flex whitespace-nowrap border px-2.5 py-1 rounded-full text-xs font-bold ${
+          u.role === 'Admin' ? 'bg-purple-500/20 text-purple-400 border-purple-500/50' : 'bg-gray-700 text-gray-300 border-gray-600'
+        }`}>{u.role}</span>
+      ),
+    },
+    {
+      key: 'actions',
+      label: 'Aksi',
+      render: (u) => (
+        <button
+          onClick={() => { setTarget(u); setPw({ a: '', b: '' }); setErr(''); }}
+          className="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 mx-auto"
+        >
+          <i className="ph ph-key" /> Reset Password
+        </button>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -98,7 +154,7 @@ export default function ApprovalPage({ sesi, notify }: Props) {
           <h3 className="font-bold text-gray-200 flex items-center gap-2 text-lg">
             <i className="ph ph-user-check text-cyan-500 text-2xl" /> Approval Registrasi User
           </h3>
-          <button onClick={() => void load()} className="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 flex items-center gap-1">
+          <button onClick={() => void refresh()} className="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 flex items-center gap-1">
             <i className="ph ph-arrows-clockwise" /> Refresh
           </button>
         </div>
@@ -110,7 +166,7 @@ export default function ApprovalPage({ sesi, notify }: Props) {
               className="mt-1 w-full px-3 py-2 rounded-lg text-sm normal-case font-normal"
               placeholder="Cari nama..."
               value={pendingName}
-              onChange={(e) => { setPendingName(e.target.value); setPPage(0); }}
+              onChange={(e) => setPendingName(e.target.value)}
             />
           </label>
           <label className="block text-xs font-bold text-gray-400 uppercase">
@@ -120,41 +176,20 @@ export default function ApprovalPage({ sesi, notify }: Props) {
               className="mt-1 w-full px-3 py-2 rounded-lg text-sm normal-case font-normal"
               placeholder="Cari NRP..."
               value={pendingNrp}
-              onChange={(e) => { setPendingNrp(e.target.value); setPPage(0); }}
+              onChange={(e) => setPendingNrp(e.target.value)}
             />
           </label>
         </fieldset>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-175">
-            <thead className="bg-gray-800 text-gray-400 text-xs uppercase tracking-wider font-bold border-b border-gray-700">
-              <tr>
-                <th className="p-4">Nama</th><th className="p-4">Profesi</th><th className="p-4">Bidang</th>
-                <th className="p-4">Unit</th><th className="p-4">NRP</th><th className="p-4 text-center">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="text-sm divide-y divide-gray-700">
-              {pendingRows.length === 0 && (
-                <tr><td colSpan={6} className="p-8 text-center text-gray-500">Tidak ada registrasi yang menunggu approval.</td></tr>
-              )}
-              {pendingRows.map((u) => (
-                <tr key={u.rowIndex} className="hover:bg-gray-700/50">
-                  <td className="p-4 font-semibold text-gray-200">{u.nama}</td>
-                  <td className="p-4 text-gray-400">{u.profesi}</td>
-                  <td className="p-4 text-gray-400">{u.bidang}</td>
-                  <td className="p-4 text-gray-400">{u.unit}</td>
-                  <td className="p-4 font-mono text-cyan-400">{u.nrp}</td>
-                  <td className="p-4 text-center">
-                    <div className="flex justify-center gap-2">
-                      <button onClick={() => void review(u.rowIndex, 'Approved')} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">Setujui</button>
-                      <button onClick={() => void review(u.rowIndex, 'Rejected')} className="bg-red-600 hover:bg-red-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">Tolak</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <Pagination page={pp} perPage={PER_PAGE} total={pendingMatches.length} onPage={setPPage} />
-        </div>
+        <DataTable
+          columns={pendingColumns}
+          rows={pendingMatches}
+          getRowKey={(u) => u.rowIndex}
+          loading={loading}
+          isFiltered={!!pendingName || !!pendingNrp}
+          emptyMessage="Tidak ada registrasi yang menunggu approval."
+          noResultsMessage="Tidak ada registrasi yang sesuai."
+          resetKey={JSON.stringify([pendingName, pendingNrp])}
+        />
       </div>
 
       <div className="bg-gray-800 rounded-2xl shadow-lg overflow-hidden border border-gray-700">
@@ -162,7 +197,7 @@ export default function ApprovalPage({ sesi, notify }: Props) {
           <h3 className="font-bold text-gray-200 flex items-center gap-2 text-lg">
             <i className="ph ph-identification-card text-cyan-500 text-2xl" /> Detail Akun / Kelola User
           </h3>
-          <button onClick={() => void load()} className="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 flex items-center gap-1">
+          <button onClick={() => void refresh()} className="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 flex items-center gap-1">
             <i className="ph ph-arrows-clockwise" /> Refresh
           </button>
         </div>
@@ -174,7 +209,7 @@ export default function ApprovalPage({ sesi, notify }: Props) {
               className="mt-1 w-full px-3 py-2 rounded-lg text-sm normal-case font-normal"
               placeholder="Cari nama..."
               value={userName}
-              onChange={(e) => { setUserName(e.target.value); setUPage(0); }}
+              onChange={(e) => setUserName(e.target.value)}
             />
           </label>
           <label className="block text-xs font-bold text-gray-400 uppercase">
@@ -184,50 +219,20 @@ export default function ApprovalPage({ sesi, notify }: Props) {
               className="mt-1 w-full px-3 py-2 rounded-lg text-sm normal-case font-normal"
               placeholder="Cari NRP..."
               value={userNrp}
-              onChange={(e) => { setUserNrp(e.target.value); setUPage(0); }}
+              onChange={(e) => setUserNrp(e.target.value)}
             />
           </label>
         </fieldset>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-200">
-            <thead className="bg-gray-800 text-gray-400 text-xs uppercase tracking-wider font-bold border-b border-gray-700">
-              <tr>
-                <th className="p-4">Nama</th><th className="p-4">NRP</th><th className="p-4">Bidang</th><th className="p-4">Unit</th>
-                <th className="p-4 text-center">Status</th><th className="p-4 text-center">Role</th><th className="p-4 text-center">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="text-sm divide-y divide-gray-700">
-              {userRows.length === 0 && (
-                <tr><td colSpan={7} className="p-8 text-center text-gray-500">Belum ada user terdaftar.</td></tr>
-              )}
-              {userRows.map((u) => (
-                <tr key={u.rowIndex} className="hover:bg-gray-700/50">
-                  <td className="p-4 font-semibold text-gray-200">{u.nama}</td>
-                  <td className="p-4 font-mono text-xs text-cyan-400">{u.nrp}</td>
-                  <td className="p-4 text-gray-400">{u.bidang}</td>
-                  <td className="p-4 text-gray-400">{u.unit}</td>
-                  <td className="p-4 text-center">
-                    <span className={`inline-flex whitespace-nowrap border px-2.5 py-1 rounded-full text-xs font-bold ${statusCls(u.status)}`}>{u.status}</span>
-                  </td>
-                  <td className="p-4 text-center">
-                    <span className={`inline-flex whitespace-nowrap border px-2.5 py-1 rounded-full text-xs font-bold ${
-                      u.role === 'Admin' ? 'bg-purple-500/20 text-purple-400 border-purple-500/50' : 'bg-gray-700 text-gray-300 border-gray-600'
-                    }`}>{u.role}</span>
-                  </td>
-                  <td className="p-4 text-center">
-                    <button
-                      onClick={() => { setTarget(u); setPw({ a: '', b: '' }); setErr(''); }}
-                      className="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 mx-auto"
-                    >
-                      <i className="ph ph-key" /> Reset Password
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <Pagination page={up} perPage={PER_PAGE} total={userMatches.length} onPage={setUPage} />
-        </div>
+        <DataTable
+          columns={userColumns}
+          rows={userMatches}
+          getRowKey={(u) => u.rowIndex}
+          loading={loading}
+          isFiltered={!!userName || !!userNrp}
+          emptyMessage="Belum ada user terdaftar."
+          noResultsMessage="Tidak ada akun yang sesuai."
+          resetKey={JSON.stringify([userName, userNrp])}
+        />
       </div>
 
       <Modal open={!!target} onClose={() => setTarget(null)}>

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { createApi } from "../adapter";
@@ -21,6 +21,55 @@ function renderApprovalPage(users: ReturnType<typeof defaultMockSeed>["users"]) 
 }
 
 describe("ApprovalPage with the mock Adapter", () => {
+  it("keeps both tables loading until their data arrives", async () => {
+    const backend = createMockBackend();
+    const getPendingUsers = backend.getPendingUsers;
+    const getAllUsers = backend.getAllUsers;
+    let finishPending!: () => void;
+    let finishUsers!: () => void;
+    backend.getPendingUsers = (...args) => new Promise((resolve) => {
+      finishPending = () => resolve(getPendingUsers(...args));
+    });
+    backend.getAllUsers = (...args) => new Promise((resolve) => {
+      finishUsers = () => resolve(getAllUsers(...args));
+    });
+    const api = createApi(backend);
+    const sesi = await api.loginUser("admin01", "demo-ganti-saya");
+
+    render(
+      <AdapterProvider api={api}>
+        <ApprovalPage sesi={sesi} notify={vi.fn()} />
+      </AdapterProvider>,
+    );
+
+    expect(screen.getAllByRole("status")).toHaveLength(2);
+    expect(screen.getAllByRole("status")[0]).toHaveTextContent("Memuat data...");
+    expect(screen.getAllByRole("status")[1]).toHaveTextContent("Memuat data...");
+
+    await act(async () => {
+      finishPending();
+      finishUsers();
+    });
+    await waitFor(() => expect(screen.getAllByRole("table")).toHaveLength(2));
+  });
+
+  it("stops loading and reports errors when a table request fails", async () => {
+    const backend = createMockBackend();
+    backend.getAllUsers = () => ({ success: false, message: "Gagal memuat akun." });
+    const api = createApi(backend);
+    const sesi = await api.loginUser("admin01", "demo-ganti-saya");
+    const notify = vi.fn();
+
+    render(
+      <AdapterProvider api={api}>
+        <ApprovalPage sesi={sesi} notify={notify} />
+      </AdapterProvider>,
+    );
+
+    await waitFor(() => expect(notify).toHaveBeenCalledWith("Gagal memuat akun.", true));
+    expect(screen.queryByText("Memuat data...")).not.toBeInTheDocument();
+  });
+
   it("approves a pending registration and reflects the updated account status", async () => {
     const user = userEvent.setup();
     const api = createApi(createMockBackend());
@@ -32,17 +81,16 @@ describe("ApprovalPage with the mock Adapter", () => {
       </AdapterProvider>,
     );
 
-    await waitFor(() => {
-      const cells = screen.getAllByText("1111");
-      expect(cells).toHaveLength(2);
-    });
-    const pendingCell = screen.getAllByText("1111")[0]!;
+    await waitFor(() => expect(screen.getAllByRole("table")).toHaveLength(2));
+    const pendingTable = screen.getAllByRole("table")[0]!;
+    const accountTable = screen.getAllByRole("table")[1]!;
+    const pendingCell = within(pendingTable).getByText("1111");
     const pendingRow = pendingCell.closest("tr");
     expect(pendingRow).not.toBeNull();
     await user.click(within(pendingRow!).getByRole("button", { name: "Setujui" }));
 
     await waitFor(() => {
-      const userRow = screen.getAllByText("1111").find((cell) =>
+      const userRow = within(accountTable).getAllByText("1111").find((cell) =>
         within(cell.closest("tr")!).queryByText("Approved"),
       )?.closest("tr");
       expect(userRow).not.toBeUndefined();
@@ -96,16 +144,16 @@ describe("ApprovalPage with the mock Adapter", () => {
     expect(within(pendingTable).queryByText("Citra Sari")).not.toBeInTheDocument();
     expect(within(accountTable).queryByText("Citra Sari")).not.toBeInTheDocument();
     await user.type(within(pendingFilters).getByLabelText("Nama"), "cItRa");
-    expect(within(pendingTable).getByText("Citra Sari")).toBeInTheDocument();
+    expect(within(screen.getAllByRole("table")[0]!).getByText("Citra Sari")).toBeInTheDocument();
     expect(within(accountTable).queryByText("Citra Sari")).not.toBeInTheDocument();
 
     await user.type(within(pendingFilters).getByLabelText("NRP"), "9876");
     expect(within(pendingTable).queryByText("Citra Sari")).not.toBeInTheDocument();
     await user.clear(within(pendingFilters).getByLabelText("NRP"));
     await user.type(within(pendingFilters).getByLabelText("NRP"), "1234");
-    expect(within(pendingTable).getByText("Citra Sari")).toBeInTheDocument();
+    expect(within(screen.getAllByRole("table")[0]!).getByText("Citra Sari")).toBeInTheDocument();
     await user.clear(within(pendingFilters).getByLabelText("Nama"));
-    expect(within(pendingTable).getByText("Citra Sari")).toBeInTheDocument();
+    expect(within(screen.getAllByRole("table")[0]!).getByText("Citra Sari")).toBeInTheDocument();
 
     await user.type(within(accountFilters).getByLabelText("Nama"), "cItRa");
     expect(within(accountTable).getAllByText("Citra Sari")).toHaveLength(2);
@@ -113,5 +161,54 @@ describe("ApprovalPage with the mock Adapter", () => {
     await user.type(within(accountFilters).getByLabelText("NRP"), "9876");
     expect(within(accountTable).getByText("Citra Sari")).toBeInTheDocument();
     expect(within(accountTable).queryByText("Pending User 1")).not.toBeInTheDocument();
+  });
+
+  it("paginates Pending and account results, resets to page one after filtering, and keeps account actions", async () => {
+    const user = userEvent.setup();
+    const seedUsers = [
+      defaultMockSeed().users[0]!,
+      ...Array.from({ length: 12 }, (_, index) => ({
+        nama: `Pending User ${index + 1}`,
+        profesi: "Perawat",
+        bidang: "SDM",
+        unit: "",
+        nrp: `P-${index + 1}`,
+        password: "password",
+        status: "Pending",
+        role: "User",
+      })),
+      {
+        nama: "Citra Sari",
+        profesi: "Perawat",
+        bidang: "SDM",
+        unit: "",
+        nrp: "009876",
+        password: "password",
+        status: "Approved",
+        role: "User",
+      },
+    ];
+
+    await renderApprovalPage(seedUsers);
+    await waitFor(() => expect(screen.getAllByRole("table")).toHaveLength(2));
+    expect(screen.getAllByRole("combobox", { name: "Baris per halaman" })).toHaveLength(2);
+
+    const [pendingTable, accountTable] = screen.getAllByRole("table");
+    const nextButtons = screen.getAllByRole("button", { name: /Selanjutnya/ });
+    await user.click(nextButtons[0]!);
+    await user.click(nextButtons[1]!);
+    expect(within(pendingTable!).getByText("Pending User 11")).toBeInTheDocument();
+    expect(within(accountTable!).getByText("Pending User 11")).toBeInTheDocument();
+
+    await user.type(within(screen.getByRole("group", { name: "Filter registrasi Pending" })).getByLabelText("Nama"), "Pending User 1");
+    expect(within(pendingTable!).getByText("Pending User 1")).toBeInTheDocument();
+    expect(screen.getByText("Menampilkan 1 - 4 dari total 4 data")).toBeInTheDocument();
+
+    const accountFilters = screen.getByRole("group", { name: "Filter semua akun" });
+    await user.type(within(accountFilters).getByLabelText("NRP"), "009876");
+    expect(within(accountTable!).getByText("Citra Sari")).toBeInTheDocument();
+    expect(within(accountTable!).getByText("Approved")).toBeInTheDocument();
+    expect(within(accountTable!).getByRole("button", { name: /Reset Password/ })).toBeInTheDocument();
+    expect(screen.getByText("Menampilkan 1 - 1 dari total 1 data")).toBeInTheDocument();
   });
 });
