@@ -8,6 +8,22 @@ import { defaultMockSeed, T_FARAH_READ_1 } from "../adapter/mock/seed";
 import UserSosialisasiProgressPage from "./UserSosialisasiProgressPage";
 
 describe("UserSosialisasiProgressPage", () => {
+  const seedUsersForFilterAndSortTests = (seed: ReturnType<typeof defaultMockSeed>) => {
+    seed.users = [
+      { ...seed.users[0]!, nama: "Admin Utama", bidang: "IT", unit: "IT" },
+      { ...seed.users[1]!, nama: "Dr. Farah", bidang: "SDM", unit: "Unit A" },
+      { ...seed.users[2]!, nama: "Budi", bidang: "  ", unit: " " },
+      {
+        nama: "Citra", profesi: "Perawat", bidang: "SDM", unit: "Unit B",
+        nrp: "0010", password: "demo-user", status: "Approved", role: "User",
+      },
+      {
+        nama: "Dewi", profesi: "Perawat", bidang: "IT", unit: "Unit A",
+        nrp: "0002", password: "demo-user", status: "Approved", role: "User",
+      },
+    ];
+  };
+
   it("shows each Approved User's counts across active documents and confirmed read times", async () => {
     const user = userEvent.setup();
     const api = createApi(createMockBackend());
@@ -160,19 +176,7 @@ describe("UserSosialisasiProgressPage", () => {
   it("filters approved Users by Bidang and Unit and keeps Unit choices independent", async () => {
     const user = userEvent.setup();
     const seed = defaultMockSeed();
-    seed.users = [
-      { ...seed.users[0]!, nama: "Admin Utama", bidang: "IT", unit: "IT" },
-      { ...seed.users[1]!, nama: "Dr. Farah", bidang: "SDM", unit: "Unit A" },
-      { ...seed.users[2]!, nama: "Budi", bidang: "  ", unit: " " },
-      {
-        nama: "Citra", profesi: "Perawat", bidang: "SDM", unit: "Unit B",
-        nrp: "0010", password: "demo-user", status: "Approved", role: "User",
-      },
-      {
-        nama: "Dewi", profesi: "Perawat", bidang: "IT", unit: "Unit A",
-        nrp: "0002", password: "demo-user", status: "Approved", role: "User",
-      },
-    ];
+    seedUsersForFilterAndSortTests(seed);
     const api = createApi(createMockBackend(seed));
     const session = await api.loginUser("admin01", "demo-ganti-saya");
     const docs = await api.getAllData(session);
@@ -225,19 +229,7 @@ describe("UserSosialisasiProgressPage", () => {
   it("sorts Nama, NRP, Bidang, Unit, and Progress in both directions", async () => {
     const user = userEvent.setup();
     const seed = defaultMockSeed();
-    seed.users = [
-      { ...seed.users[0]!, nama: "Admin Utama", bidang: "IT", unit: "IT" },
-      { ...seed.users[1]!, nama: "Dr. Farah", bidang: "SDM", unit: "Unit A" },
-      { ...seed.users[2]!, nama: "Budi", bidang: "  ", unit: " " },
-      {
-        nama: "Citra", profesi: "Perawat", bidang: "SDM", unit: "Unit B",
-        nrp: "0010", password: "demo-user", status: "Approved", role: "User",
-      },
-      {
-        nama: "Dewi", profesi: "Perawat", bidang: "IT", unit: "Unit A",
-        nrp: "0002", password: "demo-user", status: "Approved", role: "User",
-      },
-    ];
+    seedUsersForFilterAndSortTests(seed);
     seed.sosialisasi.push(
       { waktu: T_FARAH_READ_1, nrp: "0002", nama: "Dewi", docRowIndex: 2, judul: "Dokumen 1" },
       { waktu: T_FARAH_READ_1, nrp: "0002", nama: "Dewi", docRowIndex: 3, judul: "Dokumen 2" },
