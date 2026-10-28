@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 export const ICON_BTN = 'p-1.5 bg-gray-900 rounded-lg border border-gray-700 transition-colors shadow-sm';
 const BTN_PAGE =
@@ -70,6 +70,153 @@ export function Pagination({ page, perPage, total, onPage }: PaginationProps) {
         <button disabled={page >= totalPages - 1} onClick={() => onPage(page + 1)} className={BTN_PAGE}>
           Selanjutnya <i className="ph ph-caret-right text-lg" />
         </button>
+      </div>
+    </div>
+  );
+}
+
+export interface DataTableColumn<T> {
+  key: string;
+  label: string;
+  render: (row: T) => ReactNode;
+}
+
+interface DataTableProps<T> {
+  columns: readonly DataTableColumn<T>[];
+  rows: readonly T[];
+  getRowKey: (row: T) => string | number;
+  isFiltered?: boolean;
+  emptyMessage?: string;
+  noResultsMessage?: string;
+  loading?: boolean;
+}
+
+const DATA_TABLE_PAGE_SIZES = [10, 20, 50] as const;
+
+export function DataTable<T>({
+  columns,
+  rows,
+  getRowKey,
+  isFiltered = false,
+  emptyMessage = 'Belum ada data.',
+  noResultsMessage = 'Tidak ada data yang sesuai.',
+  loading = false,
+}: DataTableProps<T>) {
+  const [page, setPage] = useState(0);
+  const [perPage, setPerPage] = useState<number>(DATA_TABLE_PAGE_SIZES[0]);
+  const previousRows = useRef(rows);
+
+  useEffect(() => {
+    const sameRows =
+      previousRows.current.length === rows.length &&
+      previousRows.current.every((row, index) => Object.is(row, rows[index]));
+    if (!sameRows) setPage(0);
+    previousRows.current = rows;
+  }, [rows]);
+
+  const totalPages = Math.ceil(rows.length / perPage);
+  const visibleRows = rows.slice(page * perPage, (page + 1) * perPage);
+  const rangeStart = rows.length === 0 ? 0 : page * perPage + 1;
+  const rangeEnd = Math.min((page + 1) * perPage, rows.length);
+
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-8 text-center text-gray-400" role="status">
+        <span className="mr-2 inline-block animate-spin" aria-hidden="true">◌</span>
+        Memuat data...
+      </div>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-xl border border-gray-700 bg-gray-800/50">
+        <div className="p-8 text-center text-gray-400" role="status">
+          {isFiltered ? noResultsMessage : emptyMessage}
+        </div>
+        <div className="border-t border-gray-700 p-4 text-sm text-gray-400">
+          Menampilkan 0 data
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-gray-700">
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full text-left text-sm text-gray-300">
+          <thead className="bg-gray-800 text-xs uppercase text-gray-400">
+            <tr>
+              {columns.map((column) => (
+                <th key={column.key} scope="col" className="px-4 py-3">{column.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-700">
+            {visibleRows.map((row) => (
+              <tr key={getRowKey(row)} className="bg-gray-900/40">
+                {columns.map((column) => (
+                  <td key={column.key} className="px-4 py-3">{column.render(row)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="divide-y divide-gray-700 md:hidden" role="list" aria-label="Daftar data">
+        {visibleRows.map((row) => (
+          <div key={getRowKey(row)} role="listitem" className="space-y-3 bg-gray-900/40 p-4">
+            {columns.map((column) => (
+              <div key={column.key}>
+                <div className="mb-1 text-xs font-semibold uppercase text-gray-400">{column.label}</div>
+                <div className="text-sm text-gray-200">{column.render(row)}</div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-4 border-t border-gray-700 bg-gray-800/50 p-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-2 text-sm text-gray-400">
+            Baris per halaman
+            <select
+              aria-label="Baris per halaman"
+              value={perPage}
+              onChange={(event) => {
+                setPerPage(Number(event.target.value));
+                setPage(0);
+              }}
+              className="rounded-md border border-gray-600 bg-gray-900 px-2 py-1 text-gray-200"
+            >
+              {DATA_TABLE_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
+            </select>
+          </label>
+          <span className="text-sm text-gray-400 font-medium">
+            Menampilkan {rangeStart} - {rangeEnd} dari total {rows.length} data
+          </span>
+        </div>
+        {totalPages > 1 && (
+          <nav className="flex gap-2" aria-label="Navigasi halaman tabel">
+            <button
+              type="button"
+              disabled={page === 0}
+              onClick={() => setPage((current) => current - 1)}
+              className={BTN_PAGE}
+            >
+              <i className="ph ph-caret-left text-lg" aria-hidden="true" /> Sebelumnya
+            </button>
+            <button
+              type="button"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((current) => current + 1)}
+              className={BTN_PAGE}
+            >
+              Selanjutnya <i className="ph ph-caret-right text-lg" aria-hidden="true" />
+            </button>
+          </nav>
+        )}
       </div>
     </div>
   );
