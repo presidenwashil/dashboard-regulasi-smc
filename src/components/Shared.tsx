@@ -91,6 +91,9 @@ interface DataTableProps<T> {
   noResultsMessage?: string;
   loading?: boolean;
   resetKey?: unknown;
+  /** Optional controlled pagination: when given (pass page and onPageChange together), the table no longer owns its page state. */
+  page?: number;
+  onPageChange?: (page: number) => void;
 }
 
 const DATA_TABLE_PAGE_SIZES = [10, 20, 50] as const;
@@ -104,8 +107,16 @@ export function DataTable<T>({
   noResultsMessage = 'Tidak ada data yang sesuai.',
   loading = false,
   resetKey,
+  page: controlledPage,
+  onPageChange,
 }: DataTableProps<T>) {
-  const [page, setPage] = useState(0);
+  const [internalPage, setInternalPage] = useState(0);
+  const isControlled = onPageChange !== undefined && controlledPage !== undefined;
+  const page = isControlled ? controlledPage! : internalPage;
+  const setPage = (next: number) => {
+    if (isControlled) onPageChange!(next);
+    else setInternalPage(next);
+  };
   const [perPage, setPerPage] = useState<number>(DATA_TABLE_PAGE_SIZES[0]);
   const previousRows = useRef(rows);
   const previousResetKey = useRef(resetKey);
@@ -117,6 +128,7 @@ export function DataTable<T>({
     if (!sameRows || !Object.is(previousResetKey.current, resetKey)) setPage(0);
     previousRows.current = rows;
     previousResetKey.current = resetKey;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, resetKey]);
 
   const totalPages = Math.ceil(rows.length / perPage);
@@ -207,7 +219,7 @@ export function DataTable<T>({
             <button
               type="button"
               disabled={page === 0}
-              onClick={() => setPage((current) => current - 1)}
+              onClick={() => setPage(page - 1)}
               className={BTN_PAGE}
             >
               <i className="ph ph-caret-left text-lg" aria-hidden="true" /> Sebelumnya
@@ -215,7 +227,7 @@ export function DataTable<T>({
             <button
               type="button"
               disabled={page >= totalPages - 1}
-              onClick={() => setPage((current) => current + 1)}
+              onClick={() => setPage(page + 1)}
               className={BTN_PAGE}
             >
               Selanjutnya <i className="ph ph-caret-right text-lg" aria-hidden="true" />
