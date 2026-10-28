@@ -90,7 +90,13 @@ export default function UserSosialisasiProgressPage({ docs, session, notify }: P
         return (
           <div className="text-center">
             <span className="text-xs font-bold text-cyan-400">{user.sudah} / {total} dokumen</span>
-            <div className="mx-auto mt-1 h-1.5 w-24 overflow-hidden rounded-full bg-gray-900/60">
+            <div
+              role="progressbar"
+              aria-valuenow={pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              className="mx-auto mt-1 h-1.5 w-24 overflow-hidden rounded-full bg-gray-900/60"
+            >
               <div
                 className="h-full rounded-full bg-linear-to-r from-cyan-500 to-emerald-500 transition-all"
                 style={{ width: `${pct}%` }}

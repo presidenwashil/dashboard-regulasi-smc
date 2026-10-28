@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { DataTable, type DataTableColumn } from '../components/Shared';
 import { fmtWaktu, requireDocId } from '../utils';
 import type { Dokumen, SosialisasiSummaryData } from '../adapter/types';
@@ -15,16 +15,17 @@ interface Props {
 
 export default function UserSosialisasiDetailPage({ user, activeDocs, readMap, onBack }: Props) {
   const [tab, setTab] = useState<Tab>('sudah');
+  const readTime = useCallback(
+    (doc: Dokumen) => readMap[requireDocId(doc)]?.[user.nrp],
+    [readMap, user.nrp],
+  );
   const sudahDocs = useMemo(
-    () => activeDocs.filter((doc) => readMap[requireDocId(doc)]?.[user.nrp] !== undefined),
-    [activeDocs, readMap, user.nrp],
+    () => activeDocs.filter((doc) => readTime(doc) !== undefined),
+    [activeDocs, readTime],
   );
   const rows = useMemo(
-    () => activeDocs.filter((doc) => {
-      const sudah = readMap[requireDocId(doc)]?.[user.nrp] !== undefined;
-      return tab === 'sudah' ? sudah : !sudah;
-    }),
-    [activeDocs, readMap, user.nrp, tab],
+    () => activeDocs.filter((doc) => (tab === 'sudah') === (readTime(doc) !== undefined)),
+    [activeDocs, readTime, tab],
   );
   const sudahCount = sudahDocs.length;
   const pct = activeDocs.length > 0 ? Math.round((sudahCount / activeDocs.length) * 100) : 0;
@@ -37,6 +38,9 @@ export default function UserSosialisasiDetailPage({ user, activeDocs, readMap, o
         <div>
           <div className="font-bold text-gray-200 line-clamp-2 max-w-xs">{doc.judul}</div>
           <div className="mt-0.5 font-mono text-xs text-cyan-400">{doc.nomor || '-'}</div>
+          <span className="mt-1 inline-block rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/50">
+            Aktif Berlaku
+          </span>
         </div>
       ),
     },
@@ -45,7 +49,7 @@ export default function UserSosialisasiDetailPage({ user, activeDocs, readMap, o
       key: 'waktu',
       label: 'Waktu Konfirmasi',
       render: (doc) => {
-        const time = readMap[requireDocId(doc)]?.[user.nrp];
+        const time = readTime(doc);
         return time !== undefined ? (
           <time className="text-xs text-gray-400" dateTime={new Date(time).toISOString()}>{fmtWaktu(time)}</time>
         ) : (
@@ -83,7 +87,13 @@ export default function UserSosialisasiDetailPage({ user, activeDocs, readMap, o
             <span className="block text-2xl font-black text-cyan-400">{sudahCount} / {activeDocs.length}</span>
             <span className="block text-[10px] uppercase font-bold tracking-widest text-gray-500">Dokumen Sudah Dibaca</span>
           </div>
-          <div className="flex-1 overflow-hidden rounded-full bg-gray-900/60 h-2.5">
+          <div
+            role="progressbar"
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            className="flex-1 overflow-hidden rounded-full bg-gray-900/60 h-2.5"
+          >
             <div
               className="h-full rounded-full bg-linear-to-r from-cyan-500 to-emerald-500 transition-all"
               style={{ width: `${pct}%` }}

@@ -91,7 +91,7 @@ interface DataTableProps<T> {
   noResultsMessage?: string;
   loading?: boolean;
   resetKey?: unknown;
-  /** Optional controlled pagination: when given, the table no longer owns its page state. */
+  /** Optional controlled pagination: when given (pass page and onPageChange together), the table no longer owns its page state. */
   page?: number;
   onPageChange?: (page: number) => void;
 }

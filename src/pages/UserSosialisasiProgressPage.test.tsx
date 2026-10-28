@@ -40,18 +40,21 @@ describe("UserSosialisasiProgressPage", () => {
     const farahRow = within(userTable).getByText("Dr. Farah").closest("tr");
     expect(farahRow).not.toBeNull();
     expect(within(farahRow!).getByText("1 / 2 dokumen")).toBeInTheDocument();
+    expect(within(farahRow!).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "50");
     const budiRow = within(userTable).getByText("Budi").closest("tr");
     expect(budiRow).not.toBeNull();
     expect(within(budiRow!).getByText("1 / 2 dokumen")).toBeInTheDocument();
     const adminRow = within(userTable).getByText("Admin Utama").closest("tr");
     expect(adminRow).not.toBeNull();
     expect(within(adminRow!).getByText("0 / 2 dokumen")).toBeInTheDocument();
+    expect(within(adminRow!).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
     expect(within(userTable).queryByText("Sinta")).not.toBeInTheDocument();
     expect(within(userTable).queryByText("Rudi")).not.toBeInTheDocument();
 
     await user.click(within(userTable).getByRole("button", { name: "Lihat detail sosialisasi Dr. Farah" }));
     expect(await screen.findByRole("heading", { name: "Dr. Farah" })).toBeInTheDocument();
     expect(screen.getByText("1 / 2")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "50");
     expect(screen.getByRole("button", { name: "Kembali ke Progress Sosialisasi User" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sudah Tersosialisasi (1)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Belum Membaca (1)" })).toBeInTheDocument();
@@ -77,6 +80,28 @@ describe("UserSosialisasiProgressPage", () => {
     await user.click(screen.getByRole("button", { name: "Kembali ke Progress Sosialisasi User" }));
     const restoredTable = (await screen.findAllByRole("table"))[0]!;
     expect(within(restoredTable).getByText("Dr. Farah")).toBeInTheDocument();
+  });
+
+  it("shows the Aktif Berlaku chip on each Active Dokumen row in the per-user detail", async () => {
+    const user = userEvent.setup();
+    const api = createApi(createMockBackend());
+    const session = await api.loginUser("admin01", "demo-ganti-saya");
+    const docs = await api.getAllData(session);
+
+    render(
+      <AdapterProvider api={api}>
+        <UserSosialisasiProgressPage docs={docs} session={session} notify={vi.fn()} />
+      </AdapterProvider>,
+    );
+
+    const userTable = (await screen.findAllByRole("table"))[0]!;
+    await user.click(within(userTable).getByRole("button", { name: "Lihat detail sosialisasi Dr. Farah" }));
+    expect(await screen.findByRole("heading", { name: "Dr. Farah" })).toBeInTheDocument();
+
+    const detailTable = screen.getAllByRole("table")[0]!;
+    expect(within(detailTable).getAllByText("Aktif Berlaku")).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "Belum Membaca (1)" }));
+    expect(within(screen.getAllByRole("table")[0]!).getAllByText("Aktif Berlaku")).toHaveLength(1);
   });
 
   it("paginates the User list and preserves its state when returning from the detail page", async () => {
@@ -171,6 +196,7 @@ describe("UserSosialisasiProgressPage", () => {
     );
 
     expect(screen.getByRole("status")).toHaveTextContent("Memuat data...");
+    expect(screen.queryByRole("button", { name: "Lihat detail sosialisasi Dr. Farah" })).not.toBeInTheDocument();
     expect(screen.queryByText("Memuat progress sosialisasi...")).not.toBeInTheDocument();
     await act(async () => releaseSummary());
 
@@ -246,6 +272,12 @@ describe("UserSosialisasiProgressPage", () => {
     await user.type(searchInput, "farah");
     expect(within(table()).getByText("Dr. Farah")).toBeInTheDocument();
     expect(within(table()).queryByText("Citra")).not.toBeInTheDocument();
+
+    await user.selectOptions(unitFilter, within(unitFilter).getByRole("option", { name: "Unit A" }).getAttribute("value")!);
+    expect(within(table()).getByText("Dr. Farah")).toBeInTheDocument();
+    await user.selectOptions(unitFilter, within(unitFilter).getByRole("option", { name: "Unit B" }).getAttribute("value")!);
+    expect(screen.getByText("Tidak ada User yang cocok dengan filter atau pencarian.")).toBeInTheDocument();
+    await user.selectOptions(unitFilter, "");
 
     await user.click(within(table()).getByRole("button", { name: "Lihat detail sosialisasi Dr. Farah" }));
     expect(await screen.findByRole("heading", { name: "Dr. Farah" })).toBeInTheDocument();
