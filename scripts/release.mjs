@@ -10,6 +10,7 @@ import { buildGatesAndArtifactSteps, loadConfig, runPipeline } from './ship.mjs'
 import { CONFIG_FILE, PRODUCTION_DESCRIPTION, repoRoot } from './lib/config.mjs'
 import { runCommand } from './lib/spawn.mjs'
 import { copyFileSync, readSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
 
 
 export function loadReleaseConfig(rootDir) {
@@ -91,6 +92,18 @@ function main() {
     return
   }
 
+  // Interactivity preflight: in a non-interactive shell there is no human to
+  // confirm the cutover, so nothing runs at all — not even the gates or the
+  // push. The in-pipeline confirmation step is the second layer of the same
+  // gate (see confirmProductionRedeploy).
+  if (!process.stdin?.isTTY) {
+    log('✗ Non-interactive shell: refusing to release. The production redeploy requires')
+    log('  the releaser\'s explicit interactive confirmation — there is no auto-release path.')
+    log('  Run "npm run release" from a real terminal. See docs/ship.md.')
+    process.exitCode = 1
+    return
+  }
+
   let released = null
   const deps = {
     log,
@@ -165,4 +178,8 @@ function readStdinLine() {
   }
   if (!bytes || bytes <= 0) return ''
   return buf.toString('utf8', 0, bytes).replace(/\r?\n$/, '')
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main()
 }
