@@ -5,10 +5,103 @@
 // confirmation step — the human-in-the-loop is the gate.
 import { describe, expect, it } from 'vitest'
 import path from 'node:path'
-import { buildReleaseSteps, runPipeline } from './release.mjs'
+import os from 'node:os'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { buildReleaseSteps, confirmProductionRedeploy, loadReleaseConfig, parseRedeployResult, runPipeline } from './release.mjs'
 import { PRODUCTION_DESCRIPTION } from './lib/config.mjs'
 
 const ROOT = process.cwd()
+
+describe('confirmProductionRedeploy', () => {
+  const config = { productionDeploymentId: 'AKfycb_P' }
+
+  function fakeIo(answer) {
+    const log = []
+    return { log: (line) => log.push(line), lines: log, readLine: () => answer }
+  }
+
+  it('refuses to even prompt when the shell is non-interactive', () => {
+    const io = fakeIo('')
+    const result = confirmProductionRedeploy(config, { isTTY: false, io })
+
+    expect(result).toBe('refused')
+    expect(io.lines.join('\n')).toMatch(/non-interactive/i)
+  })
+
+  it('accepts an explicit y/yes after printing what is about to happen', () => {
+    const io = fakeIo('y')
+    const result = confirmProductionRedeploy(config, { isTTY: true, io })
+
+    expect(result).toBe('accepted')
+    expect(io.lines.join('\n')).toMatch(/AKfycb_P/)
+    expect(io.lines.join('\n')).toMatch(/same URL/i)
+  })
+
+  it('accepts YES in any casing with surrounding whitespace', () => {
+    expect(confirmProductionRedeploy(config, { isTTY: true, io: fakeIo('  Yes ') })).toBe('accepted')
+  })
+
+  it('aborts without touching production on any other answer', () => {
+    for (const answer of ['n', 'no', '', 'ok', 'ye']) {
+      expect(
+        confirmProductionRedeploy(config, { isTTY: true, io: fakeIo(answer) }),
+      ).not.toBe('accepted')
+    }
+  })
+})
+
+describe('parseRedeployResult', () => {
+  it('reads the deployment id and new version from clasp redeploy --json', () => {
+    const raw =
+      'Deploying project...\n' +
+      '{\n  "deploymentId": "AKfycb_P",\n  "versionNumber": 16,\n  "description": "production: React replatform client"\n}\n'
+
+    expect(parseRedeployResult(raw)).toEqual({
+      deploymentId: 'AKfycb_P',
+      versionNumber: 16,
+    })
+  })
+
+  it('throws when clasp output carries no parseable JSON', () => {
+    expect(() => parseRedeployResult('clasp: API error: something failed')).toThrow(/redeploy|--json|version/i)
+  })
+})
+
+describe('loadReleaseConfig', () => {
+  it('reads both deployment ids from the shared repo config', () => {
+    const tmp = mkdtempSync(path.join(os.tmpdir(), 'release-config-'))
+    writeFileSync(
+      path.join(tmp, 'ship.config.json'),
+      JSON.stringify({
+        verificationDeploymentId: 'AKfycb_V',
+        productionDeploymentId: 'AKfycb_P',
+      }),
+    )
+
+    expect(loadReleaseConfig(tmp)).toEqual({
+      verificationDeploymentId: 'AKfycb_V',
+      productionDeploymentId: 'AKfycb_P',
+    })
+  })
+
+  it('fails fast, pointing at release:setup, when the production id is missing', () => {
+    const tmp = mkdtempSync(path.join(os.tmpdir(), 'release-config-'))
+    writeFileSync(
+      path.join(tmp, 'ship.config.json'),
+      JSON.stringify({ verificationDeploymentId: 'AKfycb_V' }),
+    )
+
+    expect(() => loadReleaseConfig(tmp)).toThrow(/release:setup/)
+  })
+
+  it('passes through loadConfig\'s own failures (missing file, broken JSON)', () => {
+    const tmp = mkdtempSync(path.join(os.tmpdir(), 'release-config-'))
+    expect(() => loadReleaseConfig(tmp)).toThrow(/ship:setup/)
+
+    writeFileSync(path.join(tmp, 'ship.config.json'), '{ oops')
+    expect(() => loadReleaseConfig(tmp)).toThrow(/JSON/)
+  })
+})
 
 function fakeReleaseDeps({ accepted = true } = {}) {
   const log = []
@@ -113,6 +206,9 @@ describe('buildReleaseSteps', () => {
       '--json',
     ])
     expect(redeploy.cwd).toBe(ROOT)
+    // main() captures this step's output to print the new version — the
+    // builder/main contract for the version print.
+    expect(redeploy.capture).toBe(true)
   })
 
   it('never references the verification deployment (release must not touch it)', () => {
