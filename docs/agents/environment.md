@@ -49,6 +49,8 @@ learned by trial:
   subcommand (it becomes a stray scriptId argument → "Invalid ID").
 - `clasp redeploy <deploymentId> -d "<description>"` — point an existing
   deployment at a new version; bare form creates that version from HEAD.
+  Add `--json` when the output must be parsed (prints
+  `{deploymentId, versionNumber, description}`).
 - `clasp deploy` — create a **new** deployment (what `ship:setup` does).
 - `clasp show-authorized-user` — cheap auth-state probe.
 - `clasp <anything>` errors with a Google-side message when the machine's

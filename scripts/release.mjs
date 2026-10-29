@@ -135,7 +135,7 @@ function main() {
         return false
       }
     },
-    confirm: (step) => {
+    confirm: () => {
       const result = confirmProductionRedeploy(config, {
         isTTY: Boolean(process.stdin?.isTTY),
         io: { log, readLine: readStdinLine },

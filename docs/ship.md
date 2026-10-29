@@ -53,12 +53,55 @@ Human-only prerequisites, if missing, the script says exactly what to do:
 Re-running setup is safe and idempotent: an existing `ship.config.json` is
 kept as-is.
 
+## Production identification (`npm run release:setup`, ticket #13)
+
+One-time (per repo) identification of the **production deployment**; run from
+an interactive terminal. `scripts/release-setup.mjs`:
+
+1. Reads the verification id from `ship.config.json` (ship must be set up
+   first — `npm run ship:setup`).
+2. Lists the Apps Script deployments (`clasp deployments`, read-only) with
+   version + description, and asks the human which deployment the stable
+   production URL serves — the one pinned to the vanilla version (ADR-0003).
+   Nothing selects it automatically: it is a one-way-door identity decision.
+3. Refuses a few traps by design: an id clasp did not list (typo), the
+   verification deployment itself, and a non-interactive shell (the choice
+   belongs to a human; agents cannot answer interactive blockers from a shell).
+4. Writes `productionDeploymentId` into `ship.config.json` (committed next to
+   the verification id, the id is not a secret).
+
+Re-running it is safe: it only overwrites this one choice.
+
+## The cutover (`npm run release`)
+
+Deliberate, human-authorized production switch (ticket #13; the deployment
+table above is its contract). `scripts/release.mjs`, pinned by
+`scripts/release.test.mjs`:
+
+1. **Preflight**: refuses to run at all in a non-interactive shell — no gates,
+   no push, no redeploy. There is no auto-release path.
+2. **Ship gates and artifact**: the same ordered steps as `npm run ship` up
+   through `clasp push` (typecheck → lint → full test suite → build → copy →
+   push), halting at the first failure exactly like ship.
+3. **Explicit confirmation**: prints exactly what is about to happen (which
+   deployment, same URL, cutover semantics) and requires typing `y`/`yes`;
+   anything else aborts before the redeploy and production stays untouched.
+4. **Production redeploy**: `clasp redeploy <production-deployment-id> …
+   --json` — the **only** clasp command here that touches production. It
+   creates a new version from the freshly pushed HEAD and repoints the
+   existing deployment, preserving its id and URL (ADR-0003).
+5. **Version print**: parses the redeploy's JSON result and prints the new
+   version production now serves.
+
+After the flip, users open the same stable URL and get the React app. The
+verification deployment is untouched by release (it belongs to `ship`).
+
 ## Verification vs production during migration (ADR-0003)
 
 | Deployment | Serves | Changed by |
 | --- | --- | --- |
 | **verification** (`ship.config.json`) | latest shipped React build | every `npm run ship` |
-| **production** (existing) | the vanilla app, version-pinned | only `npm run release` (final ticket), which is explicit and deliberate |
+| **production** (`ship.config.json` → `productionDeploymentId`) | pinned version; the vanilla app until cutover, the React build after `npm run release` | only `npm run release`, which is explicit and interactive |
 
 Real-GAS verification per feature slice (see spec #1 Testing Decisions): open
 the verification URL and run the slice's checklist (authentication,

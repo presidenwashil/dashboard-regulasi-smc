@@ -19,7 +19,8 @@ guidance). The replatform spec and its tickets live as GitHub issues.
 | `npm run test` / `npm run test:watch` | Vitest suite (component + contract + mock fidelity) |
 | `npm run ship:setup` | one-time setup for the verification deployment (`ship.config.json`) |
 | `npm run ship` | validate → build → copy to `gas/Index.html` → `clasp push` → update the verification deployment (see `docs/ship.md`) |
-| `npm run release` | _(final ticket)_ explicit-only production cutover |
+| `npm run release:setup` | one-time identification of the production deployment (interactive; writes `productionDeploymentId` to `ship.config.json`) |
+| `npm run release` | the cutover: ship gates → push → explicit interactive confirmation → redeploy **only the production deployment** (id and URL unchanged; version printed — see `docs/ship.md`) |
 
 Production behavior (`google.script.run`) only exists inside the Apps Script
 sandbox — running `dist/index.html` outside it is intentionally unsupported.
