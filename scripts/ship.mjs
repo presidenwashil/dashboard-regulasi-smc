@@ -45,7 +45,7 @@ export function loadConfig(rootDir) {
   return parsed
 }
 
-export function buildSteps(rootDir, config) {
+export function buildGatesAndArtifactSteps(rootDir) {
   const gas = gasDir(rootDir)
   return [
     { name: 'typecheck', cmd: ['npm', 'run', 'typecheck'] },
@@ -60,6 +60,12 @@ export function buildSteps(rootDir, config) {
       },
     },
     { name: 'clasp push', cmd: ['clasp', 'push'], cwd: rootDir },
+  ]
+}
+
+export function buildSteps(rootDir, config) {
+  return [
+    ...buildGatesAndArtifactSteps(rootDir),
     {
       name: 'redeploy verification',
       cmd: ['clasp', 'redeploy', config.verificationDeploymentId, '-d', VERIFICATION_DESCRIPTION],
@@ -69,11 +75,13 @@ export function buildSteps(rootDir, config) {
 }
 
 export function runPipeline(steps, deps) {
-  const { run, copy, log } = deps
+  const { run, copy, confirm, log } = deps
   for (const step of steps) {
     log(`▶ ${step.name}`)
     let ok
-    if (step.copy) {
+    if (step.confirm) {
+      ok = confirm(step)
+    } else if (step.copy) {
       ok = copy(step)
     } else {
       ok = run(step)
@@ -83,7 +91,6 @@ export function runPipeline(steps, deps) {
       return false
     }
   }
-  log('✔ Shipped: gates green, artifact built and pushed, verification deployment redeployed.')
   return true
 }
 
@@ -110,7 +117,11 @@ function main() {
     },
   }
   const ok = runPipeline(buildSteps(rootDir, config), deps)
-  if (!ok) process.exitCode = 1
+  if (ok) {
+    log('✔ Shipped: gates green, artifact built and pushed, verification deployment redeployed.')
+  } else {
+    process.exitCode = 1
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
