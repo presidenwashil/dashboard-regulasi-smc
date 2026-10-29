@@ -10,6 +10,7 @@ export const CONFIG_FILE = 'ship.config.json'
 // rootDir points at this directory.
 export const GAS_DIR = 'gas'
 export const VERIFICATION_DESCRIPTION = 'verification: React replatform client'
+export const PRODUCTION_DESCRIPTION = 'production: React replatform client'
 
 export function repoRoot() {
   // scripts/lib/config.mjs → scripts/ → repo root

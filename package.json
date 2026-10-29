@@ -11,6 +11,8 @@
     "preview": "vite preview",
     "ship": "node scripts/ship.mjs",
     "ship:setup": "node scripts/ship-setup.mjs",
+    "release": "node scripts/release.mjs",
+    "release:setup": "node scripts/release-setup.mjs",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest"
