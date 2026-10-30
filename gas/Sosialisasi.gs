@@ -161,3 +161,43 @@ function getSosialisasiDetail(token, docRowIndex) {
     return { success: false, message: 'Gagal mengambil detail: ' + err.toString() };
   }
 }
+
+// Diagnostik baca-saja untuk pemilik sheet: tidak pernah menulis, menambah,
+// atau menghapus baris. Duplikat = NRP kanonik yang sama pada Dokumen yang sama;
+// pembaca yang sah membaca beberapa Dokumen berbeda bukan duplikat.
+function listSosialisasiDuplicates() {
+  var result = [];
+
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(CONFIG.SHEET_SOSIALISASI);
+    if (sheet) {
+      var rows = sheet.getDataRange().getValues();
+      var groups = {};
+      var groupOrder = [];
+      for (var i = 1; i < rows.length; i++) {
+        var docRowIndex = Number(rows[i][3]);
+        var groupKey = nrpKey_(rows[i][1]) + '|' + docRowIndex;
+        if (!Object.prototype.hasOwnProperty.call(groups, groupKey)) {
+          groups[groupKey] = { nrp: nrpDisplay_(rows[i][1]), docRowIndex: docRowIndex, count: 0, rows: [] };
+          groupOrder.push(groupKey);
+        }
+        groups[groupKey].count += 1;
+        groups[groupKey].rows.push({
+          rowIndex: i + 1,
+          timestamp: toTimestamp_(rows[i][0]),
+          nama: rows[i][2],
+          judul: rows[i][4]
+        });
+      }
+      groupOrder.forEach(function (groupKey) {
+        if (groups[groupKey].count > 1) result.push(groups[groupKey]);
+      });
+    }
+  } catch (err) {
+    Logger.log('listSosialisasiDuplicates gagal: ' + err.toString());
+  }
+
+  Logger.log(JSON.stringify(result));
+  return result;
+}
