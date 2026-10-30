@@ -1,3 +1,20 @@
+function nrpKey_(value) {
+  if (value === null || value === undefined) return '';
+  var trimmed = String(value).trim();
+  if (/^\d+$/.test(trimmed)) return trimmed.replace(/^0+(?=\d)/, '');
+  return trimmed;
+}
+
+function nrpDisplay_(value) {
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+}
+
+function toTimestamp_(value) {
+  if (value && typeof value.getTime === 'function') return value.getTime();
+  return value;
+}
+
 function getSosialisasiSheet_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(CONFIG.SHEET_SOSIALISASI);
@@ -16,12 +33,14 @@ function markDocumentRead(token, docRowIndex, judulDokumen) {
   try {
     var sheet = getSosialisasiSheet_();
     var rows = sheet.getDataRange().getValues();
+    var sessionNrp = nrpDisplay_(session.nrp);
+    var sessionKey = nrpKey_(session.nrp);
     for (var i = 1; i < rows.length; i++) {
-      if (rows[i][1] === session.nrp && Number(rows[i][3]) === Number(docRowIndex)) {
+      if (nrpKey_(rows[i][1]) === sessionKey && Number(rows[i][3]) === Number(docRowIndex)) {
         return { success: true, message: 'Dokumen sudah ditandai dibaca sebelumnya.' };
       }
     }
-    sheet.appendRow([new Date(), session.nrp, session.nama, docRowIndex, judulDokumen]);
+    sheet.appendRow([new Date(), sessionNrp, session.nama, docRowIndex, judulDokumen]);
     return { success: true, message: 'Dokumen ditandai sudah dibaca.' };
   } catch (err) {
     return { success: false, message: 'Gagal menandai dokumen: ' + err.toString() };
@@ -36,8 +55,9 @@ function getMyReadDocs(token) {
   try {
     var rows = getSosialisasiSheet_().getDataRange().getValues();
     var readDocs = [];
+    var sessionKey = nrpKey_(session.nrp);
     for (var i = 1; i < rows.length; i++) {
-      if (rows[i][1] === session.nrp) readDocs.push(Number(rows[i][3]));
+      if (nrpKey_(rows[i][1]) === sessionKey) readDocs.push(Number(rows[i][3]));
     }
     return { success: true, data: readDocs };
   } catch (err) {
@@ -52,26 +72,40 @@ function getSosialisasiSummary(token) {
   try {
     var userRows = getUsersSheet_().getDataRange().getValues();
     var approvedUsers = [];
+    var displayByKey = {};
     for (var i = 1; i < userRows.length; i++) {
       if (userRows[i][8] === 'Approved') {
+        var displayNrp = nrpDisplay_(userRows[i][5]);
         approvedUsers.push({
-          nrp: userRows[i][5],
+          nrp: displayNrp,
           nama: userRows[i][1],
           bidang: userRows[i][3],
           unit: userRows[i][4]
         });
+        var userKey = nrpKey_(userRows[i][5]);
+        if (!Object.prototype.hasOwnProperty.call(displayByKey, userKey)) {
+          displayByKey[userKey] = displayNrp;
+        }
       }
     }
 
     var readMap = {};
+    var seenByDoc = {};
     var sosRows = getSosialisasiSheet_().getDataRange().getValues();
     for (var j = 1; j < sosRows.length; j++) {
       var docIdx = Number(sosRows[j][3]);
       var ts = sosRows[j][0];
-      if (!readMap[docIdx]) readMap[docIdx] = {};
-      if (!Object.prototype.hasOwnProperty.call(readMap[docIdx], sosRows[j][1])) {
-        readMap[docIdx][sosRows[j][1]] = (ts instanceof Date) ? ts.getTime() : ts;
+      var sosKey = nrpKey_(sosRows[j][1]);
+      if (!readMap[docIdx]) {
+        readMap[docIdx] = {};
+        seenByDoc[docIdx] = {};
       }
+      if (Object.prototype.hasOwnProperty.call(seenByDoc[docIdx], sosKey)) continue;
+      var emittedKey = Object.prototype.hasOwnProperty.call(displayByKey, sosKey)
+        ? displayByKey[sosKey]
+        : nrpDisplay_(sosRows[j][1]);
+      seenByDoc[docIdx][sosKey] = emittedKey;
+      readMap[docIdx][emittedKey] = toTimestamp_(ts);
     }
 
     return { success: true, totalUser: approvedUsers.length, approvedUsers: approvedUsers, readMap: readMap };
@@ -87,7 +121,7 @@ function buildSosialisasiDetail_(docRowIndex) {
   var userRows = getUsersSheet_().getDataRange().getValues();
   for (var i = 1; i < userRows.length; i++) {
     if (userRows[i][8] === 'Approved') {
-      approvedUsers.push({ nrp: userRows[i][5], nama: userRows[i][1], bidang: userRows[i][3], unit: userRows[i][4] });
+      approvedUsers.push({ nrp: nrpDisplay_(userRows[i][5]), nama: userRows[i][1], bidang: userRows[i][3], unit: userRows[i][4] });
     }
   }
 
@@ -96,16 +130,18 @@ function buildSosialisasiDetail_(docRowIndex) {
   for (var j = 1; j < sosRows.length; j++) {
     if (Number(sosRows[j][3]) === Number(docRowIndex)) {
       var ts = sosRows[j][0];
-      if (!Object.prototype.hasOwnProperty.call(readMap, sosRows[j][1])) {
-        readMap[sosRows[j][1]] = (ts instanceof Date) ? ts.getTime() : ts;
+      var sosKey = nrpKey_(sosRows[j][1]);
+      if (!Object.prototype.hasOwnProperty.call(readMap, sosKey)) {
+        readMap[sosKey] = toTimestamp_(ts);
       }
     }
   }
 
   var sudah = [], belum = [];
   approvedUsers.forEach(function (u) {
-    if (Object.prototype.hasOwnProperty.call(readMap, u.nrp)) {
-      sudah.push({ nama: u.nama, nrp: u.nrp, bidang: u.bidang, unit: u.unit, waktu: readMap[u.nrp] });
+    var userKey = nrpKey_(u.nrp);
+    if (Object.prototype.hasOwnProperty.call(readMap, userKey)) {
+      sudah.push({ nama: u.nama, nrp: u.nrp, bidang: u.bidang, unit: u.unit, waktu: readMap[userKey] });
     } else {
       belum.push({ nama: u.nama, nrp: u.nrp, bidang: u.bidang, unit: u.unit });
     }
