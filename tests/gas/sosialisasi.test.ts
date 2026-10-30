@@ -19,6 +19,7 @@ const DOC_ROW: Row = [
 
 function makeSheet(rows: Row[]) {
   const appended: Row[] = [];
+  const writes: Row[] = [];
   const sheet = {
     getDataRange: () => ({ getValues: () => rows.map((row) => [...row]) }),
     getRange(row: number, column: number, rowCount = 1, columnCount = 1) {
@@ -27,6 +28,12 @@ function makeSheet(rows: Row[]) {
           Array.from({ length: rowCount }, (_, r) =>
             Array.from({ length: columnCount }, (_, c) => rows[row - 1 + r]?.[column - 1 + c]),
           ),
+        setValue(values: Row) {
+          writes.push([...values]);
+        },
+        setValues(values: Row[]) {
+          writes.push(...values.map((value) => [...value]));
+        },
       };
     },
     appendRow(values: Row) {
@@ -34,7 +41,7 @@ function makeSheet(rows: Row[]) {
       rows.push([...values]);
     },
   };
-  return { sheet, rows, appended };
+  return { sheet, rows, appended, writes };
 }
 
 function userRow(nrp: unknown, nama: string, status = 'Approved', role = 'User'): Row {
@@ -167,6 +174,81 @@ describe('getSosialisasiSummary (seam: fungsi publik)', () => {
       (user: { nrp: string }) => readMap[user.nrp] !== undefined,
     );
     expect(counted).toHaveLength(1);
+  });
+});
+
+describe('listSosialisasiDuplicates (seam: fungsi publik)', () => {
+  it('mengelompokkan NRP kanonik yang sama pada Dokumen yang sama menjadi satu grup', () => {
+    const { ctx } = setup({
+      sosialisasi: [
+        SOS_HEADER,
+        [FIRST_READ, 42, 'Farah', 2, 'Pedoman Kesiapan'],
+        [LATER_READ, ' 0042 ', 'Farah Baru', 2, 'Pedoman Kesiapan'],
+      ],
+    });
+
+    expect(ctx.listSosialisasiDuplicates()).toEqual([
+      {
+        nrp: '42',
+        docRowIndex: 2,
+        count: 2,
+        rows: [
+          {
+            rowIndex: 2,
+            timestamp: FIRST_READ.getTime(),
+            nama: 'Farah',
+            judul: 'Pedoman Kesiapan',
+          },
+          {
+            rowIndex: 3,
+            timestamp: LATER_READ.getTime(),
+            nama: 'Farah Baru',
+            judul: 'Pedoman Kesiapan',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('tidak melaporkan pembaca yang sah membaca dua Dokumen berbeda', () => {
+    const { ctx } = setup({
+      sosialisasi: [
+        SOS_HEADER,
+        [FIRST_READ, 42, 'Farah', 2, 'Pedoman Kesiapan'],
+        [LATER_READ, '0042', 'Farah', 3, 'Panduan Mutu'],
+      ],
+    });
+
+    expect(ctx.listSosialisasiDuplicates()).toEqual([]);
+  });
+
+  it('tidak menggabungkan NRP yang berbeda pada Dokumen yang sama', () => {
+    const { ctx } = setup({
+      sosialisasi: [
+        SOS_HEADER,
+        [FIRST_READ, 42, 'Farah', 2, 'Pedoman Kesiapan'],
+        [LATER_READ, 99, 'Budi', 2, 'Pedoman Kesiapan'],
+      ],
+    });
+
+    expect(ctx.listSosialisasiDuplicates()).toEqual([]);
+  });
+
+  it('tidak menulis atau menambah baris apa pun ke sheet', () => {
+    const { ctx, sosialisasi } = setup({
+      sosialisasi: [
+        SOS_HEADER,
+        [FIRST_READ, 42, 'Farah', 2, 'Pedoman Kesiapan'],
+        [LATER_READ, ' 0042 ', 'Farah Baru', 2, 'Pedoman Kesiapan'],
+      ],
+    });
+    const before = sosialisasi.rows.map((row) => [...row]);
+
+    ctx.listSosialisasiDuplicates();
+
+    expect(sosialisasi.appended).toHaveLength(0);
+    expect(sosialisasi.writes).toHaveLength(0);
+    expect(sosialisasi.rows).toEqual(before);
   });
 });
 
