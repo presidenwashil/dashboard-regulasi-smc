@@ -19,7 +19,8 @@ export type MockUserRow = {
 
 export type SosialisasiRecord = {
   waktu: number;
-  nrp: string;
+  /** Sheet cells may hold the NRP as text or as a number (leading zeros lost). */
+  nrp: string | number;
   nama: string;
   docRowIndex: number;
   judul: string;

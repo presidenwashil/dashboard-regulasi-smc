@@ -331,6 +331,83 @@ describe("mock fidelity: sosialisasi read map (gas/Sosialisasi.gs)", () => {
   });
 });
 
+describe("mock fidelity: canonical NRP key (gas/Sosialisasi.gs nrpKey_)", () => {
+  const PEDOMAN = "Pedoman Penanganan Risiko Rumah Zakat";
+
+  // Same approved User ("0042") with legacy rows stored as the number 42 and
+  // as " 0042 ": the mixed raw representations the fixed server bridges.
+  function mixedRawSeed(): MockSeed {
+    const seed = defaultMockSeed();
+    return {
+      ...seed,
+      sosialisasi: [
+        { waktu: T_FARAH_READ_1, nrp: 42, nama: "Dr. Farah", docRowIndex: 3, judul: PEDOMAN },
+        { waktu: T_FARAH_READ_1 + 1000, nrp: " 0042 ", nama: "Dr. Farah Baru", docRowIndex: 3, judul: PEDOMAN },
+      ],
+    };
+  }
+
+  function mixedApi() {
+    const mixedBackend = createMockBackend(mixedRawSeed());
+    return createApi(mixedBackend);
+  }
+
+  it("dedupes a read whose sheet cell is the number 42 against a Sesi NRP of \"0042\"", async () => {
+    const mixed = mixedApi();
+    const sesi = await mixed.loginUser("0042", "demo-farah");
+
+    await expect(mixed.markDocumentRead(sesi, 3, PEDOMAN)).resolves.toBe(
+      "Dokumen sudah ditandai dibaca sebelumnya.",
+    );
+    // One row per matching sheet record, no third row appended.
+    await expect(mixed.getMyReadDocs(sesi)).resolves.toEqual([3, 3]);
+  });
+
+  it("returns read history across numeric, padded, and whitespace NRP cells", async () => {
+    const seed = defaultMockSeed();
+    const mixed = createApi(
+      createMockBackend({
+        ...seed,
+        sosialisasi: [
+          { waktu: T_FARAH_READ_1, nrp: " 0042 ", nama: "Dr. Farah", docRowIndex: 3, judul: PEDOMAN },
+          { waktu: T_FARAH_READ_1 + 1000, nrp: 42, nama: "Dr. Farah", docRowIndex: 4, judul: "Panduan Terkait PPI" },
+          { waktu: T_FARAH_READ_1 + 2000, nrp: "0099", nama: "Budi", docRowIndex: 3, judul: PEDOMAN },
+        ],
+      }),
+    );
+    const sesi = await mixed.loginUser("0042", "demo-farah");
+
+    await expect(mixed.getMyReadDocs(sesi)).resolves.toEqual([3, 4]);
+  });
+
+  it("keys the summary read map on the users-sheet display NRP and keeps the first confirmation", async () => {
+    const mixed = mixedApi();
+    const sesi = await mixed.loginUser("admin01", "demo-ganti-saya");
+    const summary = await mixed.getSosialisasiSummary(sesi);
+
+    expect(summary.approvedUsers.map((u) => u.nrp).sort()).toEqual(["0042", "0987", "admin01"]);
+    expect(Object.keys(summary.readMap[3]!)).toEqual(["0042"]);
+    expect(summary.readMap[3]!["0042"]).toBe(T_FARAH_READ_1);
+  });
+
+  it("counts a User as sudah in the detail when the sheet NRP differs only by raw representation", async () => {
+    const mixed = mixedApi();
+    const sesi = await mixed.loginUser("admin01", "demo-ganti-saya");
+    const detail = await mixed.getSosialisasiDetail(sesi, 3);
+
+    expect(detail.sudah).toEqual([
+      expect.objectContaining({ nrp: "0042", waktu: T_FARAH_READ_1 }),
+    ]);
+    expect(detail.belum.map((u) => u.nrp).sort()).toEqual(["0987", "admin01"]);
+  });
+
+  it("keeps login matching trimmed-exact like Auth.gs, not canonical", async () => {
+    // The canonical key is comparison-only for Sosialisasi; the real loginUser
+    // compares the trimmed NRP string, so "42" must not log in as "0042".
+    await expect(api.loginUser("42", "demo-farah")).rejects.toThrow("NRP atau password salah.");
+  });
+});
+
 describe("mock fidelity: user statistics", () => {
   it("counts approved users by bidang and unit, defaulting empties to Lainnya", async () => {
     const sesi = await farah();
