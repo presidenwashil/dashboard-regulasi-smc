@@ -92,3 +92,9 @@ sent a Sosialisasi record.
 **Rekap**:
 An Admin-facing summary of Progress Sosialisasi — the sudah/belum breakdown per
 Dokumen, and the printable PDF version of it.
+
+**Progress Sosialisasi User**:
+The per-User compliance screen — for every Approved User, how many Active Dokumen
+they have and haven't read, with Bidang/Unit filters, nama/NRP search, and
+per-User read timestamps. Available to every Approved User; it applies no
+automatic Bidang/Unit filter.

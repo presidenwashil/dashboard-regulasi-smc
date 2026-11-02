@@ -50,11 +50,17 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     | { user: User; response: null }
     | { user: null; response: GateEnvelope };
 
-  function requireAdmin(token: unknown): AdminAccess {
+  function requireSession(token: unknown): AdminAccess {
     const user = sessionUser(token);
     if (!user) return { user: null, response: SESSION_REQUIRED() };
-    if (user.role !== "Admin") return { user: null, response: ACCESS_DENIED };
     return { user, response: null };
+  }
+
+  function requireAdmin(token: unknown): AdminAccess {
+    const access = requireSession(token);
+    if (!access.user) return access;
+    if (access.user.role !== "Admin") return { user: null, response: ACCESS_DENIED };
+    return access;
   }
 
   function docRawRows(): Array<Array<unknown>> {
@@ -201,7 +207,7 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     },
 
     getSosialisasiSummary(token: string) {
-      const access = requireAdmin(token);
+      const access = requireSession(token);
       if (!access.user) return access.response;
       const approved = seed.users.filter((u) => u.status === "Approved");
       // Mirrors gas/Sosialisasi.gs: approvedUsers is the users-sheet display
