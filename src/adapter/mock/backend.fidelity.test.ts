@@ -125,11 +125,19 @@ describe("mock fidelity: role gates and session handling", () => {
     const sesi = await farah();
     await expect(api.getPendingUsers(sesi)).rejects.toThrow("Akses ditolak.");
     await expect(api.getAllUsers(sesi)).rejects.toThrow("Akses ditolak.");
-    await expect(api.getSosialisasiSummary(sesi)).rejects.toThrow("Akses ditolak.");
     await expect(api.getSosialisasiDetail(sesi, 3)).rejects.toThrow("Akses ditolak.");
     await expect(api.generateSosialisasiPdf(sesi, 3)).rejects.toThrow("Akses ditolak.");
     await expect(api.setUserStatus(sesi, 5, "Approved")).rejects.toThrow("Akses ditolak.");
     await expect(api.resetUserPassword(sesi, 5, "pw")).rejects.toThrow("Akses ditolak.");
+  });
+
+  it("allows a User account to read the sosialisasi summary but still denies detail and Rekap PDF", async () => {
+    const sesi = await farah();
+    const summary = await api.getSosialisasiSummary(sesi);
+    expect(summary.totalUser).toBe(3);
+    expect(summary.approvedUsers.map((u) => u.nrp).sort()).toEqual(["0042", "0987", "admin01"]);
+    await expect(api.getSosialisasiDetail(sesi, 3)).rejects.toThrow("Akses ditolak.");
+    await expect(api.generateSosialisasiPdf(sesi, 3)).rejects.toThrow("Akses ditolak.");
   });
 
   it("flags unknown or logged-out sessions as expired on protected calls", async () => {
@@ -141,6 +149,12 @@ describe("mock fidelity: role gates and session handling", () => {
       sessionExpired: true,
     });
     await expect(() => freshApi.getMyReadDocs({ ...sesi, token: "totally-unknown" })).rejects.toMatchObject({
+      sessionExpired: true,
+    });
+    await expect(freshApi.getSosialisasiSummary(sesi)).rejects.toMatchObject({
+      sessionExpired: true,
+    });
+    await expect(freshApi.getSosialisasiSummary({ ...sesi, token: "totally-unknown" })).rejects.toMatchObject({
       sessionExpired: true,
     });
   });
