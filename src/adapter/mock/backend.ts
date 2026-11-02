@@ -15,8 +15,16 @@ const SESSION_REQUIRED = (message = "Sesi tidak valid, silakan login ulang.") =>
 });
 const ACCESS_DENIED = { success: false, message: "Akses ditolak." };
 
-function normNrp(value: unknown): string {
+/** gas/Sosialisasi.gs `nrpDisplay_`: trim only; keeps leading zeros for display. */
+function nrpDisplay(value: unknown): string {
   return value === null || value === undefined ? "" : String(value).trim();
+}
+
+/** gas/Sosialisasi.gs `nrpKey_`: comparison-only key; digits compare numerically. */
+function nrpKey(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  const trimmed = String(value).trim();
+  return /^\d+$/.test(trimmed) ? trimmed.replace(/^0+(?=\d)/, "") : trimmed;
 }
 
 export type MockBackend = Record<string, (...args: unknown[]) => unknown> & {
@@ -66,7 +74,7 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     /* ==================== REGISTRASI ==================== */
 
     registerUser(data: Record<string, unknown>) {
-      const nrp = normNrp(data.nrp);
+      const nrp = nrpDisplay(data.nrp);
       const nama = String(data.nama ?? "").trim();
       const password = String(data.password ?? "");
       if (!nrp || !nama || !password) {
@@ -75,7 +83,7 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
       if (password.length < 6) {
         return { success: false, message: "Password minimal 6 karakter." };
       }
-      if (seed.users.some((u) => normNrp(u.nrp) === nrp)) {
+      if (seed.users.some((u) => nrpDisplay(u.nrp) === nrp)) {
         return { success: false, message: "NRP sudah terdaftar. Silakan login, atau hubungi Admin jika lupa password." };
       }
       seed.users.push({
@@ -88,8 +96,8 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     /* ==================== LOGIN ==================== */
 
     loginUser(nrpInput: string, password: string) {
-      const nrp = normNrp(nrpInput);
-      const user = seed.users.find((u) => normNrp(u.nrp) === nrp);
+      const nrp = nrpDisplay(nrpInput);
+      const user = seed.users.find((u) => nrpDisplay(u.nrp) === nrp);
       if (!user || user.password !== password) {
         return { success: false, message: "NRP atau password salah." };
       }
@@ -109,14 +117,14 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     },
 
     logoutSession(token: string) {
-      sessions.delete(normNrp(token));
+      sessions.delete(String(token));
       return { success: true };
     },
 
     updateMyProfile(token: string, profile: Record<string, unknown>) {
       const user = sessionUser(token);
       if (!user) return SESSION_REQUIRED();
-      const target = seed.users.find((row) => normNrp(row.nrp) === normNrp(user.nrp));
+      const target = seed.users.find((row) => nrpDisplay(row.nrp) === nrpDisplay(user.nrp));
       if (!target) return { success: false, message: "User tidak ditemukan." };
 
       const updatedUser: User = {
@@ -141,12 +149,12 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
       if (password.length < 6) {
         return { success: false, message: "Password baru minimal 6 karakter." };
       }
-      const target = seed.users.find((row) => normNrp(row.nrp) === normNrp(user.nrp));
+      const target = seed.users.find((row) => nrpDisplay(row.nrp) === nrpDisplay(user.nrp));
       if (!target) return { success: false, message: "User tidak ditemukan." };
 
       target.password = password;
       for (const [otherToken, otherUser] of sessions) {
-        if (normNrp(otherUser.nrp) === normNrp(user.nrp) && otherToken !== String(token)) {
+        if (nrpDisplay(otherUser.nrp) === nrpDisplay(user.nrp) && otherToken !== String(token)) {
           sessions.delete(otherToken);
         }
       }
@@ -164,10 +172,11 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     markDocumentRead(token: string, docRowIndex: unknown, judulDokumen: string) {
       const user = sessionUser(token);
       if (!user) return SESSION_REQUIRED();
-      const myNrp = normNrp(user.nrp);
+      const myNrp = nrpDisplay(user.nrp);
+      const myKey = nrpKey(user.nrp);
       const docIndex = Number(docRowIndex);
       const existing = seed.sosialisasi.find(
-        (r) => normNrp(r.nrp) === myNrp && Number(r.docRowIndex) === docIndex,
+        (r) => nrpKey(r.nrp) === myKey && Number(r.docRowIndex) === docIndex,
       );
       if (existing) {
         return { success: true, message: "Dokumen sudah ditandai dibaca sebelumnya." };
@@ -179,14 +188,14 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     getMyReadDocs(token: string) {
       const user = sessionUser(token);
       if (!user) return SESSION_REQUIRED();
-      const myNrp = normNrp(user.nrp);
+      const myKey = nrpKey(user.nrp);
       // The real getMyReadDocs pushes one entry per matching sheet row —
       // duplicates are rare only because of markDocumentRead's insert guard,
       // so the mock preserves them instead of deduping.
       return {
         success: true,
         data: seed.sosialisasi
-          .filter((r) => normNrp(r.nrp) === myNrp)
+          .filter((r) => nrpKey(r.nrp) === myKey)
           .map((r) => Number(r.docRowIndex)),
       };
     },
@@ -195,22 +204,32 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
       const access = requireAdmin(token);
       if (!access.user) return access.response;
       const approved = seed.users.filter((u) => u.status === "Approved");
-      // approvedUsers is the only approval-filtered part: the real
-      // getSosialisasiSummary walks the users sheet for it, but its read map
-      // loops the Sosialisasi sheet unfiltered. Keep the first confirmation
-      // for each (doc, NRP), matching the one-record domain contract.
+      // Mirrors gas/Sosialisasi.gs: approvedUsers is the users-sheet display
+      // NRP, and the read map emits that display NRP for known keys (falling
+      // back to the Sosialisasi cell's display form). Dedupe is canonical and
+      // per document; the first confirmation wins.
+      const displayByKey = new Map<string, string>();
+      for (const user of approved) {
+        const key = nrpKey(user.nrp);
+        if (!displayByKey.has(key)) displayByKey.set(key, nrpDisplay(user.nrp));
+      }
       const readMap: Record<string, Record<string, number>> = {};
+      const seenByDoc: Record<string, Set<string>> = {};
       for (const record of seed.sosialisasi) {
         const docKey = String(Number(record.docRowIndex));
         readMap[docKey] = readMap[docKey] ?? {};
-        const nrp = normNrp(record.nrp);
-        if (!Object.hasOwn(readMap[docKey], nrp)) readMap[docKey][nrp] = record.waktu;
+        seenByDoc[docKey] = seenByDoc[docKey] ?? new Set<string>();
+        const key = nrpKey(record.nrp);
+        if (seenByDoc[docKey].has(key)) continue;
+        seenByDoc[docKey].add(key);
+        const emittedKey = displayByKey.get(key) ?? nrpDisplay(record.nrp);
+        readMap[docKey][emittedKey] = record.waktu;
       }
       return {
         success: true,
         totalUser: approved.length,
         approvedUsers: approved.map((u) => ({
-          nrp: normNrp(u.nrp),
+          nrp: nrpDisplay(u.nrp),
           nama: u.nama,
           bidang: u.bidang,
           unit: u.unit,
@@ -229,19 +248,20 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
       }
       const approved = seed.users
         .filter((u) => u.status === "Approved")
-        .map((u) => ({ nama: u.nama, nrp: normNrp(u.nrp), bidang: u.bidang, unit: u.unit || "-" }));
-      // Keep the first confirmation if legacy duplicate records exist.
+        .map((u) => ({ nama: u.nama, nrp: nrpDisplay(u.nrp), bidang: u.bidang, unit: u.unit || "-" }));
+      // Keep the first confirmation per canonical NRP if legacy duplicates
+      // exist; matching is canonical, the payload keeps display NRPs.
       const firstRead = new Map<string, number>();
       for (const record of seed.sosialisasi) {
         if (Number(record.docRowIndex) !== docIndex) continue;
-        const nrp = normNrp(record.nrp);
-        if (!firstRead.has(nrp)) firstRead.set(nrp, record.waktu);
+        const key = nrpKey(record.nrp);
+        if (!firstRead.has(key)) firstRead.set(key, record.waktu);
       }
       const sudah = approved
-        .filter((u) => firstRead.has(u.nrp))
-        .map((u) => ({ ...u, waktu: firstRead.get(u.nrp)! }))
+        .filter((u) => firstRead.has(nrpKey(u.nrp)))
+        .map((u) => ({ ...u, waktu: firstRead.get(nrpKey(u.nrp))! }))
         .sort((a, b) => b.waktu - a.waktu);
-      const belum = approved.filter((u) => !firstRead.has(u.nrp));
+      const belum = approved.filter((u) => !firstRead.has(nrpKey(u.nrp)));
       return {
         success: true,
         data: {
@@ -300,7 +320,7 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
         .map((u, index) => ({ row: u, rowIndex: index + 2 }))
         .filter(({ row }) => row.status === "Pending")
         .map(({ row, rowIndex }) => ({
-          rowIndex, nama: row.nama, profesi: row.profesi, bidang: row.bidang, unit: row.unit, nrp: normNrp(row.nrp),
+          rowIndex, nama: row.nama, profesi: row.profesi, bidang: row.bidang, unit: row.unit, nrp: nrpDisplay(row.nrp),
         }));
       return { success: true, data: pending };
     },
@@ -322,7 +342,7 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
       if (!access.user) return access.response;
       const users = seed.users.map((u, index) => ({
         rowIndex: index + 2, nama: u.nama, profesi: u.profesi, bidang: u.bidang, unit: u.unit,
-        nrp: normNrp(u.nrp), status: u.status, role: u.role,
+        nrp: nrpDisplay(u.nrp), status: u.status, role: u.role,
       }));
       return { success: true, data: users };
     },
@@ -393,13 +413,13 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     /* ==================== DEV-ONLY ==================== */
 
     createDevSesi(nrp: string): Sesi {
-      const user = seed.users.find((u) => normNrp(u.nrp) === normNrp(nrp))!;
+      const user = seed.users.find((u) => nrpDisplay(u.nrp) === nrpDisplay(nrp))!;
       if (!user) throw new Error(`Seed user tidak ditemukan: ${nrp}`);
       const userInfo: User = {
         nama: user.nama, profesi: user.profesi, bidang: user.bidang,
-        unit: user.unit || "", nrp: normNrp(user.nrp), role: user.role,
+        unit: user.unit || "", nrp: nrpDisplay(user.nrp), role: user.role,
       };
-      const token = `dev-${normNrp(nrp)}-${Math.random().toString(36).slice(2)}`;
+      const token = `dev-${nrpDisplay(nrp)}-${Math.random().toString(36).slice(2)}`;
       sessions.set(token, userInfo);
       return { user: userInfo, token };
     },
