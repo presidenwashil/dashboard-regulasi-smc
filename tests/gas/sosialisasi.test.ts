@@ -175,6 +175,19 @@ describe('getSosialisasiSummary (seam: fungsi publik)', () => {
     );
     expect(counted).toHaveLength(1);
   });
+
+  it('menerima Sesi User non-Admin dengan data yang sama seperti Admin', () => {
+    const { rows, first } = duplicateReadFixture();
+    const { ctx } = setup({ users: approvedUsers(), sosialisasi: rows });
+    putSession(ctx, 'sesi-admin', { nrp: 'admin01', role: 'Admin', nama: 'Admin Utama' });
+    putSession(ctx, 'sesi-farah', { nrp: '0042', role: 'User', nama: 'Farah' });
+
+    const result = ctx.getSosialisasiSummary('sesi-farah');
+
+    expect(result).toEqual(ctx.getSosialisasiSummary('sesi-admin'));
+    expect(result).toMatchObject({ success: true, totalUser: 2 });
+    expect(result.readMap['2']).toEqual({ '0042': first.getTime() });
+  });
 });
 
 describe('listSosialisasiDuplicates (seam: fungsi publik)', () => {
@@ -266,5 +279,16 @@ describe('buildSosialisasiDetail_ via getSosialisasiDetail (seam: fungsi publik)
       { nama: 'Farah', nrp: '0042', bidang: 'Yanmed', unit: 'IGD', waktu: first.getTime() },
     ]);
     expect(data.belum.map((user: { nrp: string }) => user.nrp)).not.toContain('0042');
+  });
+
+  it('menolak Sesi User non-Admin dengan pesan Akses ditolak.', () => {
+    const { rows } = duplicateReadFixture();
+    const { ctx } = setup({ users: approvedUsers(), sosialisasi: rows });
+    putSession(ctx, 'sesi-farah', { nrp: '0042', role: 'User', nama: 'Farah' });
+
+    expect(ctx.getSosialisasiDetail('sesi-farah', 2)).toEqual({
+      success: false,
+      message: 'Akses ditolak.',
+    });
   });
 });

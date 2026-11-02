@@ -29,7 +29,7 @@ const TABS: TabDef[] = [
   { id: 'sosialisasi', label: 'Sosialisasi Dokumen', icon: 'ph-book-open-check' },
   { id: 'form', label: 'Input Dokumen Baru', icon: 'ph-file-plus' },
   { id: 'approval', label: 'Approval User', icon: 'ph-user-check', adminOnly: true },
-  { id: 'progress-sosialisasi', label: 'Progress Sosialisasi User', icon: 'ph-users-three', adminOnly: true },
+  { id: 'progress-sosialisasi', label: 'Progress Sosialisasi User', icon: 'ph-users-three' },
 ];
 
 type AppProps = {
@@ -216,7 +216,7 @@ export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
       {tab === 'account' && (
         <AccountPage sesi={session} notify={notify} onProfileUpdated={handleProfileUpdated} />
       )}
-      {tab === 'progress-sosialisasi' && isAdmin && (
+      {tab === 'progress-sosialisasi' && (
         <UserSosialisasiProgressPage docs={docs} session={session} notify={notify} />
       )}
 

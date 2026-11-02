@@ -66,7 +66,7 @@ function getMyReadDocs(token) {
 }
 
 function getSosialisasiSummary(token) {
-  var auth = requireAccess_(token, 'Admin');
+  var auth = requireAccess_(token);
   if (auth.error) return auth.error;
 
   try {
