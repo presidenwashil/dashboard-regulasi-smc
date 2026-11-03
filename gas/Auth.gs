@@ -38,7 +38,9 @@ function publicUser_(session) {
     nama: session.nama,
     profesi: session.profesi,
     bidang: session.bidang,
+    bidangId: session.bidangId,
     unit: session.unit,
+    unitId: session.unitId,
     nrp: session.nrp,
     role: session.role,
   };
@@ -94,6 +96,11 @@ function registerUser(data) {
     if (password.length < 6) {
       return { success: false, message: "Password minimal 6 karakter." };
     }
+    var bidang = getMasterBidangValues_();
+    var unit = masterUnitById_(data.unitId, getMasterUnitValues_(bidang));
+    if (!unit) {
+      return { success: false, message: "Unit harus dipilih dari MasterUnit." };
+    }
 
     var sheet = getUsersSheet_();
     var rows = sheet.getDataRange().getValues();
@@ -112,13 +119,14 @@ function registerUser(data) {
       new Date(),
       nama,
       data.profesi || "",
-      data.bidang || "",
-      data.unit || "",
+      unit.bidang,
+      unit.name,
       nrp,
       hashPassword_(password, salt),
       salt,
       "Pending",
       "User",
+      unit.id,
     ]);
 
     return {
@@ -157,11 +165,18 @@ function loginUser(nrp, password) {
         };
       }
 
+      var unitIdColumn = ensureUsersUnitIdColumn_(getUsersSheet_());
+      var organization = userOrganizationByUnitId_(
+        rows[i][unitIdColumn - 1],
+        getMasterBidangValues_(),
+      );
       var userInfo = {
         nama: rows[i][1],
         profesi: rows[i][2],
-        bidang: rows[i][3],
-        unit: rows[i][4],
+        bidang: organization ? organization.bidang : "",
+        bidangId: organization ? organization.bidangId : null,
+        unit: organization ? organization.unit : "",
+        unitId: organization ? organization.unitId : null,
         nrp: nrp,
         role: role,
         sessionVersion: currentSessionVersion_(nrp),

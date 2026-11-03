@@ -19,6 +19,8 @@ import type {
   AdminUser,
   Dokumen,
   DokumenInput,
+  MasterBidang,
+  MasterUnit,
   PendingUser,
   ProfileInput,
   RegistrasiInput,
@@ -49,8 +51,24 @@ export type Adapter = {
   updateMyProfile(sesi: Sesi, input: ProfileInput): Promise<Sesi["user"]>;
   /** Change the authenticated User's password without requiring the old one. */
   changeMyPassword(sesi: Sesi, newPassword: string): Promise<string>;
-  /** Public master list of Bidang (used by Registrasi and the Dokumen form). */
-  getMasterBidang(): Promise<string[]>;
+  /** Public master list of Bidang and their stable IDs. */
+  getMasterBidang(): Promise<MasterBidang[]>;
+  /** Public Unit-to-Bidang mapping, keyed by stable IDs. */
+  getMasterUnit(): Promise<MasterUnit[]>;
+  /** Create a Bidang; the server assigns its stable ID (Admin). */
+  createMasterBidang(sesi: Sesi, name: string): Promise<MasterBidang>;
+  /** Rename a Bidang without changing its stable ID (Admin). */
+  renameMasterBidang(sesi: Sesi, id: number, name: string): Promise<MasterBidang>;
+  /** Remove an unreferenced Bidang (Admin). */
+  deleteMasterBidang(sesi: Sesi, id: number): Promise<string>;
+  /** Create a Unit Organisasi under one parent Bidang (Admin). */
+  createMasterUnit(sesi: Sesi, name: string, bidangId: number): Promise<MasterUnit>;
+  /** Rename a Unit Organisasi without changing its stable ID (Admin). */
+  renameMasterUnit(sesi: Sesi, id: number, name: string): Promise<MasterUnit>;
+  /** Change a Unit Organisasi's parent Bidang (Admin). */
+  reparentMasterUnit(sesi: Sesi, id: number, bidangId: number): Promise<MasterUnit>;
+  /** Remove an unreferenced Unit Organisasi (Admin). */
+  deleteMasterUnit(sesi: Sesi, id: number): Promise<string>;
   /**
    * All regulation documents, newest sheet row first, normalized. The Sesi
    * credential is the explicit first argument: the real getAllData requires
@@ -81,7 +99,9 @@ export type Adapter = {
   /** Pending Registrasi rows (Admin). */
   getPendingUsers(sesi: Sesi): Promise<PendingUser[]>;
   /** Approve/reject/deactivate an account (Admin). */
-  setUserStatus(sesi: Sesi, rowIndex: number, newStatus: string): Promise<string>;
+  setUserStatus(sesi: Sesi, rowIndex: number, newStatus: string, approvedUnitId?: number): Promise<string>;
+  /** Set a User's current Unit from MasterUnit (Admin). */
+  updateUserUnit(sesi: Sesi, nrp: string, unitId: number): Promise<string>;
   /** All accounts with status and role (Admin). */
   getAllUsers(sesi: Sesi): Promise<AdminUser[]>;
   /** Reset a User's password (Admin); never reveals the stored hash. */
@@ -161,8 +181,6 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
         {
           nama: input.nama,
           profesi: input.profesi,
-          bidang: input.bidang,
-          unit: input.unit,
         },
       );
       return envelope.user!;
@@ -177,9 +195,47 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
     },
     async getMasterBidang() {
       const envelope = await call<ServerEnvelope>("getMasterBidang");
-      return (envelope.data as Array<string | number | null>)
-        .map((value) => (value === null || value === undefined ? "" : String(value).trim()))
-        .filter(Boolean);
+      return ((envelope.data as unknown[]) ?? [])
+        .map(asMasterBidang)
+        .filter((value) => Number.isInteger(value.id) && value.id > 0 && value.name);
+    },
+    async getMasterUnit() {
+      const envelope = await call<ServerEnvelope>("getMasterUnit");
+      return ((envelope.data as unknown[]) ?? [])
+        .map(asMasterUnit)
+        .filter((value) =>
+          Number.isInteger(value.id) && value.id > 0 &&
+          Number.isInteger(value.bidangId) && value.bidangId > 0 &&
+          value.name && value.bidang,
+        );
+    },
+    async createMasterBidang(sesi, name) {
+      const envelope = await call<ServerEnvelope>("createMasterBidang", sesi.token, name);
+      return asMasterBidang(envelope.data);
+    },
+    async renameMasterBidang(sesi, id, name) {
+      const envelope = await call<ServerEnvelope>("renameMasterBidang", sesi.token, id, name);
+      return asMasterBidang(envelope.data);
+    },
+    async deleteMasterBidang(sesi, id) {
+      const response = await call<ServerEnvelope>("deleteMasterBidang", sesi.token, id);
+      return response.message ?? "";
+    },
+    async createMasterUnit(sesi, name, bidangId) {
+      const envelope = await call<ServerEnvelope>("createMasterUnit", sesi.token, name, bidangId);
+      return asMasterUnit(envelope.data);
+    },
+    async renameMasterUnit(sesi, id, name) {
+      const envelope = await call<ServerEnvelope>("renameMasterUnit", sesi.token, id, name);
+      return asMasterUnit(envelope.data);
+    },
+    async reparentMasterUnit(sesi, id, bidangId) {
+      const envelope = await call<ServerEnvelope>("reparentMasterUnit", sesi.token, id, bidangId);
+      return asMasterUnit(envelope.data);
+    },
+    async deleteMasterUnit(sesi, id) {
+      const response = await call<ServerEnvelope>("deleteMasterUnit", sesi.token, id);
+      return response.message ?? "";
     },
     async getAllData(sesi: Sesi) {
       // The real getAllData (gas/Documents.gs) is the one server call without
@@ -283,13 +339,25 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
         nama: String(row.nama ?? ""),
         profesi: String(row.profesi ?? ""),
         bidang: String(row.bidang ?? ""),
+        bidangId: row.bidangId === null || row.bidangId === undefined ? null : Number(row.bidangId),
         unit: String(row.unit ?? ""),
+        unitId: row.unitId === null || row.unitId === undefined ? null : Number(row.unitId),
         nrp: String(row.nrp ?? "").trim(),
       }));
       return rows as PendingUser[];
     },
-    async setUserStatus(sesi, rowIndex, newStatus) {
-      const response = await call<ServerEnvelope>("setUserStatus", sesi.token, rowIndex, newStatus);
+    async setUserStatus(sesi, rowIndex, newStatus, approvedUnitId) {
+      const response = await call<ServerEnvelope>(
+        "setUserStatus",
+        sesi.token,
+        rowIndex,
+        newStatus,
+        approvedUnitId,
+      );
+      return response.message ?? "";
+    },
+    async updateUserUnit(sesi, nrp, unitId) {
+      const response = await call<ServerEnvelope>("updateUserUnit", sesi.token, nrp, unitId);
       return response.message ?? "";
     },
     async getAllUsers(sesi) {
@@ -299,7 +367,9 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
         nama: String(row.nama ?? ""),
         profesi: String(row.profesi ?? ""),
         bidang: String(row.bidang ?? ""),
+        bidangId: row.bidangId === null || row.bidangId === undefined ? null : Number(row.bidangId),
         unit: String(row.unit ?? ""),
+        unitId: row.unitId === null || row.unitId === undefined ? null : Number(row.unitId),
         nrp: String(row.nrp ?? "").trim(),
         status: String(row.status ?? ""),
         role: String(row.role ?? ""),
@@ -320,6 +390,24 @@ export function createApi(backend: Backend, hooks: ApiHooks = {}): Adapter & obj
   };
 }
 
+function asMasterBidang(value: unknown): MasterBidang {
+  const record = (value ?? {}) as Record<string, unknown>;
+  return {
+    id: Number(record.id),
+    name: String(record.name ?? "").trim(),
+  };
+}
+
+function asMasterUnit(value: unknown): MasterUnit {
+  const record = (value ?? {}) as Record<string, unknown>;
+  return {
+    id: Number(record.id),
+    name: String(record.name ?? "").trim(),
+    bidangId: Number(record.bidangId),
+    bidang: String(record.bidang ?? "").trim(),
+  };
+}
+
 /** Object keys of the legacy read map arrive as strings; numbers out. */
 function normalizeReadMap(raw: ServerEnvelope["readMap"]): SosialisasiSummaryData["readMap"] {
   const readMap: SosialisasiSummaryData["readMap"] = {};
@@ -336,13 +424,14 @@ function normalizeReadMap(raw: ServerEnvelope["readMap"]): SosialisasiSummaryDat
 /** Domain DokumenInput -> legacy doc payload (joined lists, "-" placeholders). */
 function toLegacyDocPayload(input: DokumenInput) {
   const joined = (list: string[]) => (list.length === 0 ? "-" : list.join(", "));
+  const joinedIds = (list: number[]) => (list.length === 0 ? "-" : list.join(","));
   return {
     judul: input.judul,
     nomor: input.nomor,
     jenis: input.jenis,
     pemilik: input.pemilik,
     unit: input.unit || "-",
-    bidang: joined(input.bidang),
+    bidangIds: joinedIds(input.bidangIds),
     status: input.statusDokumen,
     revisi: input.revisi ?? "-",
     tanggal: input.tanggal ?? "",

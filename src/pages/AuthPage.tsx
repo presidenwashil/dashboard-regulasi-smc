@@ -3,7 +3,7 @@ import { LOGO_SMC } from '../utils';
 import type { Adapter } from '../adapter';
 import { useAdapter } from '../adapter/context';
 import type { Notify } from '../components/Shared';
-import type { Sesi } from '../adapter/types';
+import type { MasterUnit, Sesi } from '../adapter/types';
 
 const box = 'bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl p-6 sm:p-8';
 const label = 'block text-xs font-bold text-gray-400 uppercase mb-1';
@@ -89,30 +89,30 @@ function LoginForm({ api, onLogin, onSwitch }: { api: Adapter; onLogin: (sesi: S
 interface RegForm {
   nama: string;
   profesi: string;
-  bidang: string;
-  unit: string;
+  unitId: string;
   nrp: string;
   pw1: string;
   pw2: string;
 }
 
-const EMPTY_REG: RegForm = { nama: '', profesi: '', bidang: '', unit: '', nrp: '', pw1: '', pw2: '' };
+const EMPTY_REG: RegForm = { nama: '', profesi: '', unitId: '', nrp: '', pw1: '', pw2: '' };
 
 function RegisterForm({ api, notify, onSwitch }: { api: Adapter; notify: Notify; onSwitch: () => void }) {
-  const [master, setMaster] = useState<string[]>([]);
+  const [masterUnits, setMasterUnits] = useState<MasterUnit[]>([]);
   const [form, setForm] = useState<RegForm>(EMPTY_REG);
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    api.getMasterBidang()
-      .then(setMaster)
+    api.getMasterUnit()
+      .then(setMasterUnits)
       .catch((error: unknown) => notify(error instanceof Error ? error.message : String(error), true));
   }, [api, notify]);
 
   const set = (k: keyof RegForm) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
+  const selectedUnit = masterUnits.find((unit) => String(unit.id) === form.unitId);
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -124,8 +124,7 @@ function RegisterForm({ api, notify, onSwitch }: { api: Adapter; notify: Notify;
       const message = await api.registerUser({
         nama: form.nama.trim(),
         profesi: form.profesi.trim(),
-        bidang: form.bidang,
-        unit: form.unit.trim(),
+        unitId: Number(form.unitId),
         nrp: form.nrp.trim(),
         password: form.pw1,
       });
@@ -160,16 +159,20 @@ function RegisterForm({ api, notify, onSwitch }: { api: Adapter; notify: Notify;
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={label}>Bidang</label>
-            <select className={input} value={form.bidang} onChange={set('bidang')} required>
-              <option value="">Pilih...</option>
-              {master.map((b) => <option key={b}>{b}</option>)}
-              <option>Lainnya</option>
+            <label className={label}>Unit</label>
+            <select className={input} value={form.unitId} onChange={set('unitId')} required>
+              <option value="">Pilih Unit...</option>
+              {masterUnits.map((unit) => (
+                <option key={unit.id} value={unit.id}>{unit.name} — {unit.bidang}</option>
+              ))}
             </select>
+            <p className="mt-1 text-[10px] text-gray-500">Unit dan Bidang akan diverifikasi Admin sebelum akun disetujui.</p>
           </div>
           <div>
-            <label className={label}>Unit</label>
-            <input className={input} placeholder="cth: IGD" value={form.unit} onChange={set('unit')} required />
+            <span className={label}>Bidang Induk</span>
+            <p className={`${input} min-h-10 border border-gray-700 bg-gray-900/60 text-gray-300`}>
+              {selectedUnit?.bidang || 'Pilih Unit untuk melihat Bidang'}
+            </p>
           </div>
         </div>
         <div>

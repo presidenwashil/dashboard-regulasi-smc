@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,7 +14,7 @@ vi.mock("./pages/FormPage", () => ({ default: () => <div>Form slice</div> }));
 vi.mock("./pages/ApprovalPage", () => ({ default: () => <div>Approval slice</div> }));
 
 const storedSesi: Sesi = {
-  user: { nama: "Admin Utama", profesi: "Administrator", bidang: "IT", unit: "IT", nrp: "admin01", role: "Admin" },
+  user: { nama: "Admin Utama", profesi: "Administrator", bidang: "IT", bidangId: 4, unit: "IT", unitId: 101, nrp: "admin01", role: "Admin" },
   token: "expired-token",
 };
 
@@ -27,7 +27,7 @@ beforeEach(() => {
 });
 
 describe("App adapter and Sesi lifecycle", () => {
-  it("shows the User progress view to Admin and to a User, rendering the real summary table", async () => {
+  it("limits the global User progress view to Admin", async () => {
     const user = userEvent.setup();
     const backend = createMockBackend();
     const adminApi = createApi(backend);
@@ -35,6 +35,7 @@ describe("App adapter and Sesi lifecycle", () => {
     const createAdapter = (hooks: ApiHooks) => createApi(backend, hooks);
     const { unmount } = render(<App createAdapter={createAdapter} />);
     expect(await screen.findByRole("button", { name: /Progress Sosialisasi User/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Master Organisasi/ })).toBeInTheDocument();
 
     unmount();
     clearSesi();
@@ -43,12 +44,8 @@ describe("App adapter and Sesi lifecycle", () => {
     await user.type(screen.getByLabelText("Password"), "demo-farah");
     await user.click(screen.getByRole("button", { name: "Masuk" }));
 
-    const progressTab = await screen.findByRole("button", { name: /Progress Sosialisasi User/ });
-    await user.click(progressTab);
-
-    const userTable = await screen.findByRole("table");
-    expect(within(userTable).getByText("Budi")).toBeInTheDocument();
-    expect(within(userTable).getByText("0987")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Progress Sosialisasi User/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Master Organisasi/ })).not.toBeInTheDocument();
   });
 
   it("persists the Sesi returned by the injected mock adapter after login", async () => {
@@ -87,9 +84,10 @@ describe("App adapter and Sesi lifecycle", () => {
     await user.type(screen.getByLabelText("Nama"), "Farah Terkini");
     await user.clear(screen.getByLabelText("Profesi"));
     await user.type(screen.getByLabelText("Profesi"), "Dokter Spesialis");
-    await user.selectOptions(screen.getByLabelText("Bidang"), "Komite Mutu");
-    await user.clear(screen.getByLabelText("Unit"));
-    await user.type(screen.getByLabelText("Unit"), "Poli");
+    expect(screen.getByText("Yanmed")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Bidang")).not.toBeInTheDocument();
+    expect(screen.getByText("IGD")).toBeInTheDocument();
+    expect(screen.queryByLabelText("account-unit")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Simpan Profil" }));
     expect(await screen.findByText("Profil berhasil diperbarui.")).toBeInTheDocument();
     expect(screen.getByText("Farah Terkini")).toBeInTheDocument();
@@ -97,8 +95,8 @@ describe("App adapter and Sesi lifecycle", () => {
       user: {
         nama: "Farah Terkini",
         profesi: "Dokter Spesialis",
-        bidang: "Komite Mutu",
-        unit: "Poli",
+        bidang: "Yanmed",
+        unit: "IGD",
         nrp: "0042",
       },
     });

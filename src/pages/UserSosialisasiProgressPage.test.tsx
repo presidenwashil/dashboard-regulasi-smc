@@ -9,17 +9,22 @@ import UserSosialisasiProgressPage from "./UserSosialisasiProgressPage";
 
 describe("UserSosialisasiProgressPage", () => {
   const seedUsersForFilterAndSortTests = (seed: ReturnType<typeof defaultMockSeed>) => {
+    seed.masterUnit.push(
+      { id: 201, name: "Unit A", bidangId: 2 },
+      { id: 202, name: "Unit B", bidangId: 2 },
+      { id: 203, name: "Unit A", bidangId: 4 },
+    );
     seed.users = [
-      { ...seed.users[0]!, nama: "Admin Utama", bidang: "IT", unit: "IT" },
-      { ...seed.users[1]!, nama: "Dr. Farah", bidang: "SDM", unit: "Unit A" },
-      { ...seed.users[2]!, nama: "Budi", bidang: "  ", unit: " " },
+      { ...seed.users[0]!, nama: "Admin Utama", bidang: "IT", unit: "IT", unitId: 101 },
+      { ...seed.users[1]!, nama: "Dr. Farah", bidang: "SDM", unit: "Unit A", unitId: 201 },
+      { ...seed.users[2]!, nama: "Budi", bidang: "  ", unit: " ", unitId: null },
       {
         nama: "Citra", profesi: "Perawat", bidang: "SDM", unit: "Unit B",
-        nrp: "0010", password: "demo-user", status: "Approved", role: "User",
+        unitId: 202, nrp: "0010", password: "demo-user", status: "Approved", role: "User",
       },
       {
         nama: "Dewi", profesi: "Perawat", bidang: "IT", unit: "Unit A",
-        nrp: "0002", password: "demo-user", status: "Approved", role: "User",
+        unitId: 203, nrp: "0002", password: "demo-user", status: "Approved", role: "User",
       },
     ];
   };
@@ -115,6 +120,7 @@ describe("UserSosialisasiProgressPage", () => {
         profesi: "Perawat",
         bidang: "IT",
         unit: "IT",
+        unitId: 101,
         nrp: `nrp-${number}`,
         password: "demo-user",
         status: "Approved",
@@ -139,7 +145,6 @@ describe("UserSosialisasiProgressPage", () => {
 
     const api = createApi(createMockBackend(seed));
     const session = await api.loginUser("admin01", "demo-ganti-saya");
-    seed.users[0]!.status = "Pending";
     const docs = await api.getAllData(session);
 
     render(
@@ -171,7 +176,7 @@ describe("UserSosialisasiProgressPage", () => {
     const restoredTable = (await screen.findAllByRole("table"))[0]!;
     expect(within(restoredTable).getByText("User 11")).toBeInTheDocument();
     expect(within(restoredTable).queryByText("User 01")).not.toBeInTheDocument();
-    expect(screen.getByText("Menampilkan 11 - 12 dari total 12 data")).toBeInTheDocument();
+    expect(screen.getByText("Menampilkan 11 - 13 dari total 13 data")).toBeInTheDocument();
     expect(screen.getAllByRole("navigation", { name: "Navigasi halaman tabel" })).toHaveLength(1);
   });
 

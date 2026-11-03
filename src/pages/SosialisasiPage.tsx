@@ -240,10 +240,12 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
                 <i className="ph ph-file-doc text-xl" />
               </a>
             )}
-            <button onClick={() => onEdit(d)} title="Edit Data Dokumen"
-              className={`${ICON_BTN} text-emerald-400 hover:text-emerald-300 hover:border-emerald-400`}>
-              <i className="ph ph-pencil-simple text-xl" />
-            </button>
+            {d.canEdit && (
+              <button onClick={() => onEdit(d)} title="Edit Data Dokumen"
+                className={`${ICON_BTN} text-emerald-400 hover:text-emerald-300 hover:border-emerald-400`}>
+                <i className="ph ph-pencil-simple text-xl" />
+              </button>
+            )}
             {aktif && !sudah && (
               <button
                 onClick={() => { setAgree(false); setConfirmDoc(d); }}
@@ -266,7 +268,8 @@ export default function SosialisasiPage({ docs, session, notify, onEdit }: Props
           <h3 className="font-bold text-gray-200 flex items-center gap-2 text-lg">
             <i className="ph ph-book-open-check text-cyan-500 text-2xl" /> Sosialisasi Dokumen
           </h3>
-          <p className="text-xs text-gray-400 mt-1">Semua dokumen regulasi. Tandai dokumen aktif yang sudah Anda baca dan pahami.</p>
+          <p className="text-xs text-gray-400 mt-1">Dokumen regulasi yang dapat Anda akses. Tandai dokumen aktif yang sudah Anda baca dan pahami.</p>
+          <p className="text-xs text-amber-300/80 mt-1">Tautan file Google Drive masih dapat diakses langsung oleh siapa pun yang memilikinya.</p>
         </div>
         <div className="bg-gray-900/60 border border-gray-700 rounded-xl px-5 py-3 text-center">
           <span className="block text-2xl font-black text-cyan-400">{sudahCount} / {aktifRows.length}</span>

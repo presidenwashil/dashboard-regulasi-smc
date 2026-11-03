@@ -7,7 +7,7 @@ import type { RawDokumenRow } from "./rawShapes";
 
 const testSesi = (token: string): Sesi => ({
   token,
-  user: { nama: "Dr. Farah", profesi: "Dokter", bidang: "Yanmed", unit: "IGD", nrp: "0042", role: "User" },
+  user: { nama: "Dr. Farah", profesi: "Dokter", bidang: "Yanmed", bidangId: 7, unit: "IGD", unitId: 102, nrp: "0042", role: "User" },
 });
 
 describe("adapter envelope contract (createApi over a Backend)", () => {
@@ -15,7 +15,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     const rawRows = [
       [1750000000000, "Pedoman Contoh", "PM/2024/004", "Pedoman", "Direksi", "Direktur",
         "Umum, Komite Mutu", "Revisi", 2, 1740000000000,
-        "https://docs.google.com/document/d/abc/view", "-", "TKRS, PMKP", "", "", 7],
+        "https://docs.google.com/document/d/abc/view", "-", "TKRS, PMKP", "", "", 7, false, "1,9"],
     ] as RawDokumenRow[];
     const backend = { getAllData: () => ({ success: true, data: rawRows }) } as
       unknown as Backend;
@@ -28,7 +28,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     const rawRows = [
       [1750000000000, "Pedoman Contoh", "PM/2024/004", "Pedoman", "Direksi", "Direktur",
         "Umum, Komite Mutu", "Revisi", 2, 1740000000000,
-        "https://docs.google.com/document/d/abc/view", "-", "TKRS, PMKP", "", "", 7],
+        "https://docs.google.com/document/d/abc/view", "-", "TKRS, PMKP", "", "", 7, false, "1,9"],
     ];
     const backend = { getAllData: () => rawRows } as unknown as Backend;
     const api = createApi(backend);
@@ -126,7 +126,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
   });
 
   it("returns the Sesi created by a successful loginUser envelope", async () => {
-    const user = { nama: "Dr. Farah", profesi: "Dokter", bidang: "Yanmed", unit: "IGD", nrp: "0042", role: "User" };
+    const user = { nama: "Dr. Farah", profesi: "Dokter", bidang: "Yanmed", bidangId: 7, unit: "IGD", unitId: 102, nrp: "0042", role: "User" };
     const backend = { loginUser: () => ({ success: true, token: "tok-1", user }) } as unknown as Backend;
     const api = createApi(backend);
     await expect(api.loginUser("0042", "rahasia")).resolves.toEqual({ token: "tok-1", user });
@@ -208,11 +208,11 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     });
     const api = createApi(backend);
     await expect(
-      api.registerUser({ nama: "Budi", profesi: "Perawat", bidang: "SDM", unit: "IGD", nrp: " 00123 ", password: "rahasia" }),
+      api.registerUser({ nama: "Budi", profesi: "Perawat", unitId: 102, nrp: " 00123 ", password: "rahasia" }),
     ).resolves.toBe("Registrasi berhasil!");
     expect(calls[0]).toEqual([
       "registerUser",
-      { nama: "Budi", profesi: "Perawat", bidang: "SDM", unit: "IGD", nrp: "00123", password: "rahasia" },
+      { nama: "Budi", profesi: "Perawat", unitId: 102, nrp: "00123", password: "rahasia" },
     ]);
   });
 
@@ -235,13 +235,11 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     await expect(api.updateMyProfile(sesi, {
       nama: "Farah Baru",
       profesi: "Dokter",
-      bidang: "Yanmed",
-      unit: "IGD",
     })).resolves.toMatchObject({ nama: "Farah Baru", nrp: "0042" });
     await expect(api.changeMyPassword(sesi, "password-baru")).resolves.toContain("berhasil");
 
     expect(calls).toEqual([
-      ["updateMyProfile", "tok", { nama: "Farah Baru", profesi: "Dokter", bidang: "Yanmed", unit: "IGD" }],
+      ["updateMyProfile", "tok", { nama: "Farah Baru", profesi: "Dokter" }],
       ["changeMyPassword", "tok", "password-baru"],
     ]);
   });
@@ -259,7 +257,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     const api = createApi(backend);
     await api.saveDataWithFiles(testSesi("tok"), {
       judul: "SPO Ujian", nomor: "SPO/RM/003", jenis: "SPO", pemilik: "Casemix", unit: "Data Entry",
-      bidang: ["Umum", "SDM"], statusDokumen: "Revisi", revisi: "2", tanggal: "2026-05-01",
+      bidangIds: [1, 2], statusDokumen: "Revisi", revisi: "2", tanggal: "2026-05-01",
       akreditasi: ["TKRS"], keterangan: "-", statusBerlaku: "Aktif",
       pdfFile: null, wordFile: null,
     });
@@ -268,7 +266,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
       "tok",
       {
         judul: "SPO Ujian", nomor: "SPO/RM/003", jenis: "SPO", pemilik: "Casemix", unit: "Data Entry",
-        bidang: "Umum, SDM", status: "Revisi", revisi: "2", tanggal: "2026-05-01",
+        bidangIds: "1,2", status: "Revisi", revisi: "2", tanggal: "2026-05-01",
         akreditasi: "TKRS", keterangan: "-", statusBerlaku: "Aktif",
         pdfFile: null, wordFile: null,
       },
@@ -288,7 +286,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     const api = createApi(backend);
     await api.updateDataWithFiles(testSesi("tok"), {
       judul: "SPO Ujian", nomor: "SPO/RM/003", jenis: "SPO", pemilik: "Casemix", unit: "Data Entry",
-      bidang: [], statusDokumen: "Baru", revisi: null, tanggal: "2026-05-01",
+      bidangIds: [], statusDokumen: "Baru", revisi: null, tanggal: "2026-05-01",
       akreditasi: [], keterangan: "", statusBerlaku: "Aktif",
       pdfFile: null, wordFile: null,
     }, 7,
@@ -298,7 +296,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
       "tok",
       {
         judul: "SPO Ujian", nomor: "SPO/RM/003", jenis: "SPO", pemilik: "Casemix", unit: "Data Entry",
-        bidang: "-", status: "Baru", revisi: "-", tanggal: "2026-05-01",
+        bidangIds: "-", status: "Baru", revisi: "-", tanggal: "2026-05-01",
         akreditasi: "-", keterangan: "-", statusBerlaku: "Aktif",
         existingPdfUrl: "https://docs.google.com/document/d/keep/view",
         existingWordUrl: "",

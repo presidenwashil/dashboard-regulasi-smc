@@ -3,52 +3,137 @@ function getUsersSheet_() {
   var sheet = ss.getSheetByName(CONFIG.SHEET_USERS);
   if (!sheet) {
     sheet = ss.insertSheet(CONFIG.SHEET_USERS);
-    sheet.appendRow(['Timestamp', 'Nama', 'Profesi', 'Bidang', 'Unit', 'NRP', 'PasswordHash', 'Salt', 'Status', 'Role']);
+    sheet.appendRow(['Timestamp', 'Nama', 'Profesi', 'Bidang', 'Unit', 'NRP', 'PasswordHash', 'Salt', 'Status', 'Role', 'UnitID']);
   }
+  ensureUsersUnitIdColumn_(sheet);
   return sheet;
 }
 
+function ensureUsersUnitIdColumn_(sheet) {
+  var rows = sheet.getDataRange().getValues();
+  var header = rows[0] || [];
+  var column = masterColumn_(header, 'UnitID');
+  if (column < 0) {
+    column = header.length;
+    sheet.getRange(1, column + 1).setValue('UnitID');
+  }
+  return column + 1;
+}
+
+function userOrganization_(row, sheet, masterBidang) {
+  var unitIdColumn = ensureUsersUnitIdColumn_(sheet);
+  return userOrganizationByUnitId_(row[unitIdColumn - 1], masterBidang);
+}
+
+function requireCurrentAdmin_(token) {
+  var auth = requireAccess_(token);
+  if (auth.error) return auth;
+
+  var nrp = (auth.session.nrp || '').toString().trim();
+  var rows = getUsersSheet_().getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if ((rows[i][5] || '').toString().trim() !== nrp) continue;
+    if (rows[i][8] !== 'Approved' || rows[i][9] !== 'Admin') {
+      return { error: { success: false, message: 'Akses ditolak.' } };
+    }
+    return auth;
+  }
+  return { error: { success: false, message: 'Akses ditolak.' } };
+}
+
 function getPendingUsers(token) {
-  var auth = requireAccess_(token, 'Admin');
+  var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
-  var rows = getUsersSheet_().getDataRange().getValues();
+  var sheet = getUsersSheet_();
+  var rows = sheet.getDataRange().getValues();
+  var masterBidang = getMasterBidangValues_();
   var pending = [];
   for (var i = 1; i < rows.length; i++) {
     if (rows[i][8] === 'Pending') {
+      var organization = userOrganization_(rows[i], sheet, masterBidang);
       pending.push({
         rowIndex: i + 1,
-        nama: rows[i][1], profesi: rows[i][2], bidang: rows[i][3],
-        unit: rows[i][4], nrp: rows[i][5]
+        nama: rows[i][1], profesi: rows[i][2],
+        bidang: organization ? organization.bidang : (rows[i][3] || ''),
+        bidangId: organization ? organization.bidangId : null,
+        unit: organization ? organization.unit : (rows[i][4] || ''),
+        unitId: organization ? organization.unitId : null,
+        nrp: rows[i][5]
       });
     }
   }
   return { success: true, data: pending };
 }
 
-function setUserStatus(token, rowIndex, newStatus) {
-  var auth = requireAccess_(token, 'Admin');
+function setUserStatus(token, rowIndex, newStatus, approvedUnitId) {
+  var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
   try {
-    getUsersSheet_().getRange(rowIndex, 9).setValue(newStatus); // kolom I = Status
+    var sheet = getUsersSheet_();
+    var rowNumber = Number(rowIndex);
+    var rows = sheet.getDataRange().getValues();
+    if (!Number.isInteger(rowNumber) || rowNumber < 2 || rowNumber > rows.length) {
+      return { success: false, message: 'Gagal update status: baris tidak ditemukan.' };
+    }
+    if (newStatus === 'Approved') {
+      var bidang = getMasterBidangValues_();
+      var unit = masterUnitById_(approvedUnitId, getMasterUnitValues_(bidang));
+      if (!unit) {
+        return { success: false, message: 'Unit harus dipilih dari MasterUnit sebelum akun disetujui.' };
+      }
+      sheet.getRange(rowNumber, 4, 1, 2).setValues([[unit.bidang, unit.name]]);
+      sheet.getRange(rowNumber, ensureUsersUnitIdColumn_(sheet)).setValue(unit.id);
+    }
+    sheet.getRange(rowNumber, 9).setValue(newStatus); // kolom I = Status
     return { success: true, message: 'Status user diperbarui menjadi ' + newStatus + '.' };
   } catch (err) {
     return { success: false, message: 'Gagal update status: ' + err.toString() };
   }
 }
 
-function getAllUsers(token) {
-  var auth = requireAccess_(token, 'Admin');
+function updateUserUnit(token, nrp, unitId) {
+  var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
   try {
-    var rows = getUsersSheet_().getDataRange().getValues();
+    var bidang = getMasterBidangValues_();
+    var unit = masterUnitById_(unitId, getMasterUnitValues_(bidang));
+    if (!unit) return { success: false, message: 'Unit harus dipilih dari MasterUnit.' };
+    var targetNrp = (nrp || '').toString().trim();
+    var sheet = getUsersSheet_();
+    var rows = sheet.getDataRange().getValues();
+    for (var i = 1; i < rows.length; i++) {
+      if ((rows[i][5] || '').toString().trim() !== targetNrp) continue;
+      sheet.getRange(i + 1, 4, 1, 2).setValues([[unit.bidang, unit.name]]);
+      sheet.getRange(i + 1, ensureUsersUnitIdColumn_(sheet)).setValue(unit.id);
+      return { success: true, message: 'Unit user berhasil diperbarui.' };
+    }
+    return { success: false, message: 'User tidak ditemukan.' };
+  } catch (err) {
+    return { success: false, message: 'Gagal memperbarui Unit user: ' + err.toString() };
+  }
+}
+
+function getAllUsers(token) {
+  var auth = requireCurrentAdmin_(token);
+  if (auth.error) return auth.error;
+
+  try {
+    var sheet = getUsersSheet_();
+    var rows = sheet.getDataRange().getValues();
+    var masterBidang = getMasterBidangValues_();
     var users = [];
     for (var i = 1; i < rows.length; i++) {
+      var organization = userOrganization_(rows[i], sheet, masterBidang);
       users.push({
         rowIndex: i + 1,
-        nama: rows[i][1], profesi: rows[i][2], bidang: rows[i][3], unit: rows[i][4],
+        nama: rows[i][1], profesi: rows[i][2],
+        bidang: organization ? organization.bidang : (rows[i][3] || ''),
+        bidangId: organization ? organization.bidangId : null,
+        unit: organization ? organization.unit : (rows[i][4] || ''),
+        unitId: organization ? organization.unitId : null,
         nrp: rows[i][5], status: rows[i][8], role: rows[i][9]
       });
     }
@@ -59,7 +144,7 @@ function getAllUsers(token) {
 }
 
 function resetUserPassword(token, rowIndex, newPassword) {
-  var auth = requireAccess_(token, 'Admin');
+  var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
   newPassword = (newPassword || '').toString();
@@ -85,17 +170,20 @@ function updateMyProfile(token, profile) {
     for (var i = 1; i < rows.length; i++) {
       if ((rows[i][5] || "").toString().trim() !== nrp) continue;
 
+      var organization = userOrganization_(rows[i], sheet, getMasterBidangValues_());
       var user = {
         nama: (profile.nama || "").toString().trim(),
         profesi: (profile.profesi || "").toString().trim(),
-        bidang: (profile.bidang || "").toString().trim(),
-        unit: (profile.unit || "").toString().trim(),
+        bidang: organization ? organization.bidang : "",
+        bidangId: organization ? organization.bidangId : null,
+        unit: organization ? organization.unit : "",
+        unitId: organization ? organization.unitId : null,
         nrp: nrp,
         role: auth.session.role,
         sessionVersion: auth.session.sessionVersion || currentSessionVersion_(nrp),
       };
-      sheet.getRange(i + 1, 2, 1, 4).setValues([
-        [user.nama, user.profesi, user.bidang, user.unit],
+      sheet.getRange(i + 1, 2, 1, 2).setValues([
+        [user.nama, user.profesi],
       ]);
       CacheService.getScriptCache().put(
         token,
@@ -152,14 +240,17 @@ function getUserStats(token) {
   if (auth.error) return auth.error;
 
   try {
-    var rows = getUsersSheet_().getDataRange().getValues();
+    var sheet = getUsersSheet_();
+    var rows = sheet.getDataRange().getValues();
+    var masterBidang = getMasterBidangValues_();
     var byBidang = {}, byUnit = {}, total = 0;
 
     for (var i = 1; i < rows.length; i++) {
       if (rows[i][8] !== 'Approved') continue;
       total++;
-      var bidang = rows[i][3] || 'Lainnya';
-      var unit = rows[i][4] || 'Lainnya';
+      var organization = userOrganization_(rows[i], sheet, masterBidang);
+      var bidang = organization ? organization.bidang : 'Lainnya';
+      var unit = organization ? organization.unit : 'Lainnya';
       byBidang[bidang] = (byBidang[bidang] || 0) + 1;
       byUnit[unit] = (byUnit[unit] || 0) + 1;
     }

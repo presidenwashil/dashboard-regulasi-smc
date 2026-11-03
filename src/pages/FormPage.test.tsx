@@ -25,5 +25,8 @@ describe("FormPage with the mock Adapter", () => {
     expect(screen.getByLabelText("TKRS")).toBeChecked();
     expect(screen.getByLabelText("PMKP")).toBeChecked();
     expect(screen.getByRole("spinbutton")).toHaveValue(2);
+    expect(screen.queryByPlaceholderText("Ketik manual Bidang Terkait...")).not.toBeInTheDocument();
+    expect(screen.getByText("Pilih Bidang/Komite yang dapat membaca dokumen. Jika dikosongkan, akses mengikuti aturan umum.")).toBeInTheDocument();
+    expect(screen.getByText("Tautan file Google Drive masih dapat diakses langsung oleh siapa pun yang memilikinya.")).toBeInTheDocument();
   });
 });

@@ -70,7 +70,7 @@ describe("ApprovalPage with the mock Adapter", () => {
     expect(screen.queryByText("Memuat data...")).not.toBeInTheDocument();
   });
 
-  it("approves a pending registration and reflects the updated account status", async () => {
+  it("confirms a requested Unit from MasterUnit before approving a registration", async () => {
     const user = userEvent.setup();
     const api = createApi(createMockBackend());
     const sesi = await api.loginUser("admin01", "demo-ganti-saya");
@@ -87,13 +87,41 @@ describe("ApprovalPage with the mock Adapter", () => {
     const pendingCell = within(pendingTable).getByText("1111");
     const pendingRow = pendingCell.closest("tr");
     expect(pendingRow).not.toBeNull();
-    await user.click(within(pendingRow!).getByRole("button", { name: "Setujui" }));
+    await user.click(within(pendingRow!).getByRole("button", { name: "Verifikasi & Setujui" }));
+    await user.selectOptions(screen.getByLabelText("Unit yang disetujui"), "102");
+    await user.click(screen.getByRole("button", { name: "Setujui Akun" }));
 
     await waitFor(() => {
       const userRow = within(accountTable).getAllByText("1111").find((cell) =>
         within(cell.closest("tr")!).queryByText("Approved"),
       )?.closest("tr");
       expect(userRow).not.toBeUndefined();
+    });
+    await expect(api.loginUser("1111", "demo-sinta")).resolves.toMatchObject({
+      user: { bidang: "Yanmed" },
+    });
+  });
+
+  it("lets Admin change an existing user's Unit from MasterUnit", async () => {
+    const user = userEvent.setup();
+    const api = createApi(createMockBackend());
+    const sesi = await api.loginUser("admin01", "demo-ganti-saya");
+
+    render(
+      <AdapterProvider api={api}>
+        <ApprovalPage sesi={sesi} notify={vi.fn()} />
+      </AdapterProvider>,
+    );
+
+    const tables = await screen.findAllByRole("table");
+    const budi = within(tables[1]!).getByText("Budi").closest("tr");
+    expect(budi).not.toBeNull();
+    await user.click(within(budi!).getByRole("button", { name: "Atur Unit" }));
+    await user.selectOptions(screen.getByLabelText("Unit"), "101");
+    await user.click(screen.getByRole("button", { name: "Simpan Unit" }));
+
+    await expect(api.loginUser("0987", "demo-budi")).resolves.toMatchObject({
+      user: { bidang: "IT" },
     });
   });
 

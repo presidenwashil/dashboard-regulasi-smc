@@ -38,7 +38,6 @@ function detailSeed(): MockSeed {
 async function renderDetail(seed: MockSeed, afterLogin?: () => void) {
   const api = createApi(createMockBackend(seed));
   const sesi = await api.loginUser("admin01", "demo-ganti-saya");
-  seed.users[0]!.status = "Pending";
   afterLogin?.();
   const onBack = vi.fn();
 
@@ -79,23 +78,23 @@ describe("SosialisasiDetailPage", () => {
     expect(within(table).getByText("Belum 1")).toBeInTheDocument();
     expect(within(table).queryByText("Belum 11")).not.toBeInTheDocument();
     expect(within(table).queryByRole("columnheader", { name: "Waktu Baca" })).not.toBeInTheDocument();
-    expect(screen.getByText("Menampilkan 1 - 10 dari total 12 data")).toBeInTheDocument();
+    expect(screen.getByText("Menampilkan 1 - 10 dari total 13 data")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Selanjutnya/ }));
     expect(within(screen.getByRole("table")).getByText("Belum 11")).toBeInTheDocument();
   });
 
-  it("shows each empty reader message when there are no Approved Users and keeps the back action", async () => {
+  it("shows an empty read list with the current Admin still eligible and keeps the back action", async () => {
     const user = userEvent.setup();
     const seed = detailSeed();
     const { onBack } = await renderDetail(seed, () => {
-      seed.users = [];
+      seed.users = [seed.users[0]!];
       seed.sosialisasi = [];
     });
 
     expect(await screen.findByRole("status")).toHaveTextContent("Belum ada yang membaca.");
     await user.click(screen.getByRole("button", { name: /Belum Membaca/ }));
-    expect(screen.getByRole("status")).toHaveTextContent("Semua karyawan sudah membaca.");
+    expect(screen.getByRole("table")).toHaveTextContent("Admin Utama");
 
     await user.click(screen.getByRole("button", { name: /Kembali ke Sosialisasi Dokumen/ }));
     expect(onBack).toHaveBeenCalledOnce();

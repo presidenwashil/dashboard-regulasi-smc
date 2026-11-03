@@ -8,7 +8,7 @@ function escapeHtml_(value) {
 }
 
 function generateSosialisasiPdf(token, docRowIndex) {
-  var auth = requireAccess_(token, 'Admin');
+  var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
   try {

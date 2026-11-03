@@ -5,13 +5,13 @@
  */
 
 /**
- * One Dokumen row as `getAllData` returns it: a 16-element array
+ * One Dokumen row as `getAllData` returns it: an 18-element array
  * [Timestamp(ms), Judul, Nomor, Jenis, Pemilik, Unit, Bidang, StatusDokumen,
  * Revisi, Tanggal(ms), PdfUrl, WordUrl, Akreditasi, Keterangan, StatusBerlaku,
- * SpreadsheetRowIndex], rows newest-first.
+ * SpreadsheetRowIndex, CanEdit, BidangTargetIDs], rows newest-first.
  *
  * The cell values arrive as whatever the spreadsheet held — numbers may be
  * numbers, strings may be strings, lists are comma-joined, "-" is the
  * placeholder for empty, and the row index is appended at the end.
  */
-export type RawDokumenRow = Array<string | number | null>;
+export type RawDokumenRow = Array<string | number | boolean | null>;

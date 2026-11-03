@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useAdapter } from '../adapter/context';
 import { DataTable, Modal, type DataTableColumn, type Notify } from '../components/Shared';
-import type { AdminUser, PendingUser, Sesi } from '../adapter/types';
+import type { AdminUser, MasterUnit, PendingUser, Sesi } from '../adapter/types';
 
 function filterByNameAndNrp<T extends { nama: string; nrp: string }>(
   users: T[],
@@ -32,11 +32,18 @@ export default function ApprovalPage({ sesi, notify }: Props) {
   const api = useAdapter();
   const [pending, setPending] = useState<PendingUser[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [masterUnits, setMasterUnits] = useState<MasterUnit[]>([]);
   const [pendingName, setPendingName] = useState('');
   const [pendingNrp, setPendingNrp] = useState('');
   const [userName, setUserName] = useState('');
   const [userNrp, setUserNrp] = useState('');
   const [target, setTarget] = useState<AdminUser | null>(null);
+  const [approvalTarget, setApprovalTarget] = useState<PendingUser | null>(null);
+  const [approvalUnitId, setApprovalUnitId] = useState('');
+  const [membershipTarget, setMembershipTarget] = useState<AdminUser | null>(null);
+  const [membershipUnitId, setMembershipUnitId] = useState('');
+  const [membershipError, setMembershipError] = useState('');
+  const [membershipBusy, setMembershipBusy] = useState(false);
   const [pw, setPw] = useState({ a: '', b: '' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -45,9 +52,14 @@ export default function ApprovalPage({ sesi, notify }: Props) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [p, u] = await Promise.all([api.getPendingUsers(sesi), api.getAllUsers(sesi)]);
+      const [p, u, units] = await Promise.all([
+        api.getPendingUsers(sesi),
+        api.getAllUsers(sesi),
+        api.getMasterUnit(),
+      ]);
       setPending(p);
       setUsers(u);
+      setMasterUnits(units);
     } finally {
       setLoading(false);
     }
@@ -68,12 +80,56 @@ export default function ApprovalPage({ sesi, notify }: Props) {
   }, [refresh]);
 
   const review = async (rowIndex: number, status: 'Approved' | 'Rejected') => {
+    if (status === 'Approved') {
+      const pendingUser = pending.find((user) => user.rowIndex === rowIndex);
+      if (!pendingUser) return;
+      setApprovalTarget(pendingUser);
+      setApprovalUnitId(pendingUser.unitId === null ? '' : String(pendingUser.unitId));
+      setErr('');
+      return;
+    }
     try {
       const message = await api.setUserStatus(sesi, rowIndex, status);
       notify(message || 'Status diperbarui.');
       void refresh();
     } catch (e) {
       notify((e as Error).message, true);
+    }
+  };
+
+  const submitApproval = async (event?: FormEvent) => {
+    event?.preventDefault();
+    if (!approvalTarget) return;
+    const unitId = Number(approvalUnitId);
+    if (!masterUnits.some((unit) => unit.id === unitId)) return setErr('Pilih Unit dari MasterUnit.');
+    setBusy(true);
+    try {
+      const message = await api.setUserStatus(sesi, approvalTarget.rowIndex, 'Approved', unitId);
+      notify(message || 'Akun disetujui.');
+      setApprovalTarget(null);
+      void refresh();
+    } catch (error) {
+      setErr((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitMembership = async (event?: FormEvent) => {
+    event?.preventDefault();
+    if (!membershipTarget) return;
+    const unitId = Number(membershipUnitId);
+    if (!masterUnits.some((unit) => unit.id === unitId)) return setMembershipError('Pilih Unit dari MasterUnit.');
+    setMembershipBusy(true);
+    try {
+      const message = await api.updateUserUnit(sesi, membershipTarget.nrp, unitId);
+      notify(message || 'Unit user diperbarui.');
+      setMembershipTarget(null);
+      void refresh();
+    } catch (error) {
+      setMembershipError((error as Error).message);
+    } finally {
+      setMembershipBusy(false);
     }
   };
 
@@ -108,7 +164,7 @@ export default function ApprovalPage({ sesi, notify }: Props) {
       label: 'Aksi',
       render: (u) => (
         <div className="flex justify-center gap-2">
-          <button onClick={() => void review(u.rowIndex, 'Approved')} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">Setujui</button>
+          <button onClick={() => void review(u.rowIndex, 'Approved')} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">Verifikasi & Setujui</button>
           <button onClick={() => void review(u.rowIndex, 'Rejected')} className="bg-red-600 hover:bg-red-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">Tolak</button>
         </div>
       ),
@@ -137,12 +193,20 @@ export default function ApprovalPage({ sesi, notify }: Props) {
       key: 'actions',
       label: 'Aksi',
       render: (u) => (
-        <button
-          onClick={() => { setTarget(u); setPw({ a: '', b: '' }); setErr(''); }}
-          className="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 mx-auto"
-        >
-          <i className="ph ph-key" /> Reset Password
-        </button>
+        <div className="flex flex-wrap justify-center gap-2">
+          <button
+            onClick={() => { setMembershipTarget(u); setMembershipUnitId(u.unitId === null ? '' : String(u.unitId)); setMembershipError(''); }}
+            className="bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1"
+          >
+            <i className="ph ph-buildings" /> Atur Unit
+          </button>
+          <button
+            onClick={() => { setTarget(u); setPw({ a: '', b: '' }); setErr(''); }}
+            className="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1"
+          >
+            <i className="ph ph-key" /> Reset Password
+          </button>
+        </div>
       ),
     },
   ];
@@ -234,6 +298,74 @@ export default function ApprovalPage({ sesi, notify }: Props) {
           resetKey={JSON.stringify([userName, userNrp])}
         />
       </div>
+
+      <Modal open={!!approvalTarget} onClose={() => setApprovalTarget(null)}>
+        <form onSubmit={submitApproval}>
+          <div className="bg-gray-900/60 px-6 py-4 border-b border-gray-700 flex items-center gap-3">
+            <i className="ph ph-user-check text-emerald-400 text-2xl" />
+            <h3 className="font-bold text-gray-100 text-lg">Verifikasi Unit & Setujui Akun</h3>
+          </div>
+          <div className="p-6 space-y-4">
+            <p className="text-sm font-semibold text-cyan-400 bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2.5">
+              {approvalTarget?.nama} (NRP: {approvalTarget?.nrp})
+            </p>
+            <p className="text-xs text-gray-400">
+              Unit yang dipilih saat registrasi adalah permintaan dan harus diverifikasi Admin sebelum akun aktif. Bidang mengikuti relasi MasterUnit.
+            </p>
+            <label className="block text-xs font-bold text-gray-400 uppercase">
+              Unit yang disetujui
+              <select className="mt-1 w-full px-4 py-2.5 rounded-lg text-sm normal-case" value={approvalUnitId}
+                onChange={(event) => setApprovalUnitId(event.target.value)} required>
+                <option value="">Pilih Unit...</option>
+                {masterUnits.map((unit) => (
+                  <option key={unit.id} value={unit.id}>{unit.name} — {unit.bidang}</option>
+                ))}
+              </select>
+            </label>
+            {err && <div role="alert" className="text-red-400 text-xs font-semibold bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{err}</div>}
+          </div>
+          <div className="bg-gray-900/40 px-6 py-4 flex justify-end gap-3 border-t border-gray-700">
+            <button type="button" onClick={() => setApprovalTarget(null)} className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-300 hover:bg-gray-700">Batal</button>
+            <button type="submit" disabled={busy}
+              className="px-5 py-2 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-60">
+              {busy ? 'Memproses...' : 'Setujui Akun'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={!!membershipTarget} onClose={() => setMembershipTarget(null)}>
+        <form onSubmit={submitMembership}>
+          <div className="bg-gray-900/60 px-6 py-4 border-b border-gray-700 flex items-center gap-3">
+            <i className="ph ph-buildings text-violet-400 text-2xl" />
+            <h3 className="font-bold text-gray-100 text-lg">Ubah Unit User</h3>
+          </div>
+          <div className="p-6 space-y-4">
+            <p className="text-sm font-semibold text-cyan-400 bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2.5">
+              {membershipTarget?.nama} (NRP: {membershipTarget?.nrp})
+            </p>
+            <p className="text-xs text-gray-400">Perubahan keanggotaan berlaku segera pada hak akses dokumen.</p>
+            <label className="block text-xs font-bold text-gray-400 uppercase">
+              Unit
+              <select className="mt-1 w-full px-4 py-2.5 rounded-lg text-sm normal-case" value={membershipUnitId}
+                onChange={(event) => setMembershipUnitId(event.target.value)} required>
+                <option value="">Pilih Unit...</option>
+                {masterUnits.map((unit) => (
+                  <option key={unit.id} value={unit.id}>{unit.name} — {unit.bidang}</option>
+                ))}
+              </select>
+            </label>
+            {membershipError && <div role="alert" className="text-red-400 text-xs font-semibold bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{membershipError}</div>}
+          </div>
+          <div className="bg-gray-900/40 px-6 py-4 flex justify-end gap-3 border-t border-gray-700">
+            <button type="button" onClick={() => setMembershipTarget(null)} className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-300 hover:bg-gray-700">Batal</button>
+            <button type="submit" disabled={membershipBusy}
+              className="px-5 py-2 rounded-xl text-sm font-bold bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-60">
+              {membershipBusy ? 'Menyimpan...' : 'Simpan Unit'}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       <Modal open={!!target} onClose={() => setTarget(null)}>
         <form onSubmit={submitReset}>

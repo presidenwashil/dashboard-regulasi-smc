@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { useAdapter } from '../adapter/context';
-import type { Dokumen, DokumenInput, FilePayload, Sesi, StatusBerlaku } from '../adapter/types';
+import type { Dokumen, DokumenInput, FilePayload, MasterBidang, Sesi, StatusBerlaku } from '../adapter/types';
 import { AKREDITASI_OPTIONS, DATA_UNIT, JENIS_OPTIONS, PEMILIK_OPTIONS, fmtTanggalInput, requireDocId } from '../utils';
 import type { Notify } from '../components/Shared';
 
@@ -38,7 +38,7 @@ interface FormProps {
 export default function FormPage(props: FormProps) {
   const api = useAdapter();
   const { notify } = props;
-  const [master, setMaster] = useState<string[] | null>(null);
+  const [master, setMaster] = useState<MasterBidang[] | null>(null);
 
   useEffect(() => {
     api.getMasterBidang()
@@ -57,8 +57,9 @@ interface FormState {
   jenisLainnya: string;
   pemilik: string;
   unit: string;
-  bidang: string[];
-  bidangLainnya: string;
+  bidangIds: number[];
+  invalidBidang: string[];
+  confirmInvalidBidang: boolean;
   status: string;
   revisi: string;
   tanggal: string;
@@ -67,17 +68,19 @@ interface FormState {
   keterangan: string;
 }
 
-function initialState(d: Dokumen | null, master: string[]): FormState {
+function initialState(d: Dokumen | null, master: MasterBidang[]): FormState {
   const blank: FormState = {
     judul: '', nomor: '', jenis: '', jenisLainnya: '', pemilik: '', unit: '',
-    bidang: [], bidangLainnya: '', status: '', revisi: '', tanggal: '',
+    bidangIds: [], invalidBidang: [], confirmInvalidBidang: false, status: '', revisi: '', tanggal: '',
     statusBerlaku: 'Aktif', akreditasi: [], keterangan: '',
   };
   if (!d) return blank;
 
   const jenisKnown = (JENIS_OPTIONS as string[]).includes(d.jenis);
-  const known = d.bidang.filter((b) => master.includes(b));
-  const other = d.bidang.filter((b) => !master.includes(b));
+  const validIds = d.bidangIds.filter((id) => master.some((candidate) => candidate.id === id));
+  const invalid = d.bidangIds.length === 0
+    ? d.bidang
+    : d.bidangIds.filter((id) => !master.some((candidate) => candidate.id === id)).map((id) => `ID ${id}`);
 
   return {
     judul: d.judul,
@@ -86,8 +89,9 @@ function initialState(d: Dokumen | null, master: string[]): FormState {
     jenisLainnya: jenisKnown ? '' : d.jenis,
     pemilik: d.pemilik,
     unit: d.unit && d.unit !== '-' ? d.unit : '',
-    bidang: other.length ? [...known, 'Lainnya'] : known,
-    bidangLainnya: other.join(', '),
+    bidangIds: [...new Set(validIds)],
+    invalidBidang: invalid,
+    confirmInvalidBidang: false,
     status: d.statusDokumen ?? '',
     revisi: d.statusDokumen === 'Revisi' ? d.revisi ?? '' : '',
     tanggal: d.tanggal === null ? '' : fmtTanggalInput(d.tanggal),
@@ -103,7 +107,7 @@ function toStatusBerlaku(value: string): StatusBerlaku {
 }
 
 interface FormInnerProps extends FormProps {
-  master: string[];
+  master: MasterBidang[];
 }
 
 function FormInner({ master, editing, sesi, notify, onSaved }: FormInnerProps) {
@@ -116,28 +120,36 @@ function FormInner({ master, editing, sesi, notify, onSaved }: FormInnerProps) {
   const set = (k: keyof FormState) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setF((s) => ({ ...s, [k]: e.target.value }));
 
-  const toggleIn = (key: 'bidang' | 'akreditasi', val: string) =>
+  const toggleBidang = (id: number) =>
     setF((s) => ({
       ...s,
-      [key]: s[key].includes(val) ? s[key].filter((x) => x !== val) : [...s[key], val],
+      bidangIds: s.bidangIds.includes(id)
+        ? s.bidangIds.filter((current) => current !== id)
+        : [...s.bidangIds, id],
+    }));
+  const toggleAkreditasi = (value: string) =>
+    setF((s) => ({
+      ...s,
+      akreditasi: s.akreditasi.includes(value)
+        ? s.akreditasi.filter((current) => current !== value)
+        : [...s.akreditasi, value],
     }));
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editing && !pdf) return notify('File PDF wajib diupload.', true);
+    if (sesi.user.role === 'Admin' && f.invalidBidang.length && !f.confirmInvalidBidang) {
+      return notify('Periksa dan koreksi Bidang/Komite lama yang tidak ada di MasterBidang sebelum menyimpan.', true);
+    }
     setSaving(true);
     try {
-      const bidangFinal = [
-        ...f.bidang.filter((b) => b !== 'Lainnya'),
-        ...(f.bidang.includes('Lainnya') && f.bidangLainnya.trim() ? [f.bidangLainnya.trim()] : []),
-      ];
       const payload: DokumenInput = {
         judul: f.judul,
         nomor: f.nomor,
         jenis: f.jenis === 'Lainnya' ? f.jenisLainnya : f.jenis,
         pemilik: f.pemilik,
         unit: f.unit,
-        bidang: bidangFinal,
+        bidangIds: f.bidangIds,
         statusDokumen: f.status === 'Revisi' ? 'Revisi' : 'Baru',
         revisi: f.status === 'Revisi' ? f.revisi : null,
         tanggal: f.tanggal || null,
@@ -257,17 +269,46 @@ function FormInner({ master, editing, sesi, notify, onSaved }: FormInnerProps) {
               )}
             </div>
             <div>
-              <label className={`${lbl} mb-2`}>Bidang/Komite Terkait</label>
-              <div className="border border-gray-700 rounded-xl p-4 max-h-48 overflow-y-auto bg-gray-900/40 grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {[...master, 'Lainnya'].map((b) => (
-                  <label key={b} className="flex items-center gap-2 text-sm text-gray-300 hover:text-cyan-400 transition-colors">
-                    <input type="checkbox" className="checkbox-custom" checked={f.bidang.includes(b)} onChange={() => toggleIn('bidang', b)} />
-                    <span className={b === 'Lainnya' ? 'font-bold text-cyan-400' : ''}>{b}</span>
+              <label className={`${lbl} mb-2`}>Bidang/Komite Terkait <span className="text-xs font-normal text-gray-500">(Opsional)</span></label>
+              <p className="text-xs text-gray-400 mb-3">
+                Pilih Bidang/Komite yang dapat membaca dokumen. Jika dikosongkan, akses mengikuti aturan umum.
+              </p>
+              <p className="text-xs text-amber-300/80 mb-3">
+                Tautan file Google Drive masih dapat diakses langsung oleh siapa pun yang memilikinya.
+              </p>
+              {sesi.user.role !== 'Admin' && editing && (
+                <p className="text-xs text-amber-300 mb-3">Hanya Admin yang dapat mengubah tujuan akses dokumen.</p>
+              )}
+              <fieldset
+                disabled={Boolean(editing && sesi.user.role !== 'Admin')}
+                className="border border-gray-700 rounded-xl p-4 max-h-48 overflow-y-auto bg-gray-900/40 grid grid-cols-2 sm:grid-cols-3 gap-3 disabled:opacity-70"
+              >
+                {master.map((bidang) => (
+                  <label key={bidang.id} className="flex items-center gap-2 text-sm text-gray-300 hover:text-cyan-400 transition-colors">
+                    <input type="checkbox" className="checkbox-custom" checked={f.bidangIds.includes(bidang.id)} onChange={() => toggleBidang(bidang.id)} />
+                    <span>{bidang.name}</span>
                   </label>
                 ))}
-              </div>
-              {f.bidang.includes('Lainnya') && (
-                <input className={`${inp} mt-3`} placeholder="Ketik manual Bidang Terkait..." value={f.bidangLainnya} onChange={set('bidangLainnya')} />
+              </fieldset>
+              {f.invalidBidang.length > 0 && (
+                <div className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+                  <p>Tujuan lama berikut belum terhubung ke ID Bidang: {f.invalidBidang.join(', ')}.</p>
+                  {sesi.user.role === 'Admin' && (
+                    <label className="mt-2 flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        className="checkbox-custom mt-0.5"
+                        checked={f.confirmInvalidBidang}
+                        onChange={(event) => setF((state) => ({ ...state, confirmInvalidBidang: event.target.checked }))}
+                      />
+                      <span>
+                        Saya sudah memilih ulang tujuan dengan ID master yang benar atau sengaja menghapusnya.
+                        Jika tidak ada tujuan tersisa, dokumen dapat dibaca semua user Approved.
+                      </span>
+                    </label>
+                  )}
+                  {sesi.user.role !== 'Admin' && <p className="mt-2">Hubungi Admin untuk memperbaikinya.</p>}
+                </div>
               )}
             </div>
           </>)}
@@ -316,7 +357,7 @@ function FormInner({ master, editing, sesi, notify, onSaved }: FormInnerProps) {
               <div className="flex flex-wrap gap-2.5">
                 {AKREDITASI_OPTIONS.map((a) => (
                   <label key={a} className="inline-flex items-center gap-1.5 text-xs font-semibold bg-gray-900 border border-gray-700 px-3 py-1.5 rounded-full cursor-pointer hover:border-purple-400/50 hover:text-purple-400 transition-colors">
-                    <input type="checkbox" className="checkbox-custom" checked={f.akreditasi.includes(a)} onChange={() => toggleIn('akreditasi', a)} />
+                    <input type="checkbox" className="checkbox-custom" checked={f.akreditasi.includes(a)} onChange={() => toggleAkreditasi(a)} />
                     {a}
                   </label>
                 ))}

@@ -28,19 +28,31 @@ function getSosialisasiSheet_() {
 function markDocumentRead(token, docRowIndex, judulDokumen) {
   var auth = requireAccess_(token);
   if (auth.error) return auth.error;
-  var session = auth.session;
+  var actor = currentDocumentActor_(auth.session);
+  if (!actor) return { success: false, message: 'Akses ditolak.' };
 
   try {
+    var docs = getDocsSheet_().getDataRange().getValues();
+    var docIndex = Number(docRowIndex);
+    if (!Number.isInteger(docIndex) || docIndex < 2 || docIndex - 1 >= docs.length) {
+      return { success: false, message: 'Dokumen tidak ditemukan.' };
+    }
+    var docRow = docs[docIndex - 1];
+    while (docRow.length < 19) docRow.push('');
+    if (!canReadDocument_(docRow, actor, getMasterBidangValues_())) {
+      return { success: false, message: 'Akses ditolak.' };
+    }
+
     var sheet = getSosialisasiSheet_();
     var rows = sheet.getDataRange().getValues();
-    var sessionNrp = nrpDisplay_(session.nrp);
-    var sessionKey = nrpKey_(session.nrp);
+    var sessionNrp = nrpDisplay_(actor.nrp);
+    var sessionKey = nrpKey_(actor.nrp);
     for (var i = 1; i < rows.length; i++) {
       if (nrpKey_(rows[i][1]) === sessionKey && Number(rows[i][3]) === Number(docRowIndex)) {
         return { success: true, message: 'Dokumen sudah ditandai dibaca sebelumnya.' };
       }
     }
-    sheet.appendRow([new Date(), sessionNrp, session.nama, docRowIndex, judulDokumen]);
+    sheet.appendRow([new Date(), sessionNrp, actor.nama, docRowIndex, docRow[1] || judulDokumen]);
     return { success: true, message: 'Dokumen ditandai sudah dibaca.' };
   } catch (err) {
     return { success: false, message: 'Gagal menandai dokumen: ' + err.toString() };
@@ -50,14 +62,22 @@ function markDocumentRead(token, docRowIndex, judulDokumen) {
 function getMyReadDocs(token) {
   var auth = requireAccess_(token);
   if (auth.error) return auth.error;
-  var session = auth.session;
+  var actor = currentDocumentActor_(auth.session);
+  if (!actor) return { success: false, message: 'Akses ditolak.' };
 
   try {
     var rows = getSosialisasiSheet_().getDataRange().getValues();
+    var docs = getDocsSheet_().getDataRange().getValues();
+    var master = getMasterBidangValues_();
     var readDocs = [];
-    var sessionKey = nrpKey_(session.nrp);
+    var sessionKey = nrpKey_(actor.nrp);
     for (var i = 1; i < rows.length; i++) {
-      if (nrpKey_(rows[i][1]) === sessionKey) readDocs.push(Number(rows[i][3]));
+      if (nrpKey_(rows[i][1]) !== sessionKey) continue;
+      var docIndex = Number(rows[i][3]);
+      if (!Number.isInteger(docIndex) || docIndex < 2 || docIndex - 1 >= docs.length) continue;
+      var docRow = docs[docIndex - 1];
+      while (docRow.length < 19) docRow.push('');
+      if (canReadDocument_(docRow, actor, master)) readDocs.push(docIndex);
     }
     return { success: true, data: readDocs };
   } catch (err) {
@@ -66,21 +86,24 @@ function getMyReadDocs(token) {
 }
 
 function getSosialisasiSummary(token) {
-  var auth = requireAccess_(token);
+  var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
   try {
-    var userRows = getUsersSheet_().getDataRange().getValues();
+    var usersSheet = getUsersSheet_();
+    var userRows = usersSheet.getDataRange().getValues();
+    var masterBidang = getMasterBidangValues_();
     var approvedUsers = [];
     var displayByKey = {};
     for (var i = 1; i < userRows.length; i++) {
       if (userRows[i][8] === 'Approved') {
         var displayNrp = nrpDisplay_(userRows[i][5]);
+        var organization = userOrganization_(userRows[i], usersSheet, masterBidang);
         approvedUsers.push({
           nrp: displayNrp,
           nama: userRows[i][1],
-          bidang: userRows[i][3],
-          unit: userRows[i][4]
+          bidang: organization ? organization.bidang : '',
+          unit: organization ? organization.unit : ''
         });
         var userKey = nrpKey_(userRows[i][5]);
         if (!Object.prototype.hasOwnProperty.call(displayByKey, userKey)) {
@@ -118,10 +141,18 @@ function buildSosialisasiDetail_(docRowIndex) {
   var docRow = getDocsSheet_().getRange(docRowIndex, 1, 1, 15).getValues()[0];
 
   var approvedUsers = [];
-  var userRows = getUsersSheet_().getDataRange().getValues();
+  var usersSheet = getUsersSheet_();
+  var userRows = usersSheet.getDataRange().getValues();
+  var masterBidang = getMasterBidangValues_();
   for (var i = 1; i < userRows.length; i++) {
     if (userRows[i][8] === 'Approved') {
-      approvedUsers.push({ nrp: nrpDisplay_(userRows[i][5]), nama: userRows[i][1], bidang: userRows[i][3], unit: userRows[i][4] });
+      var organization = userOrganization_(userRows[i], usersSheet, masterBidang);
+      approvedUsers.push({
+        nrp: nrpDisplay_(userRows[i][5]),
+        nama: userRows[i][1],
+        bidang: organization ? organization.bidang : '',
+        unit: organization ? organization.unit : ''
+      });
     }
   }
 
@@ -152,7 +183,7 @@ function buildSosialisasiDetail_(docRowIndex) {
 }
 
 function getSosialisasiDetail(token, docRowIndex) {
-  var auth = requireAccess_(token, 'Admin');
+  var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
   try {
