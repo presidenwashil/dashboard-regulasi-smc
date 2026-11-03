@@ -6,7 +6,7 @@ afterEach(() => clearSesi());
 
 const SESI: Sesi = {
   token: "tok-1",
-  user: { nama: "Dr. Farah", profesi: "Dokter", bidang: "Yanmed", unit: "IGD", nrp: "0042", role: "User" },
+  user: { nama: "Dr. Farah", profesi: "Dokter", bidang: "Yanmed", bidangId: 7, unit: "IGD", unitId: 102, nrp: "0042", role: "User" },
 };
 
 describe("Sesi storage (sessionStorage persistence)", () => {

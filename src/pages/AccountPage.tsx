@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useAdapter } from "../adapter/context";
 import type { ProfileInput, Sesi } from "../adapter/types";
 import type { Notify } from "../components/Shared";
@@ -20,20 +20,11 @@ export default function AccountPage({ sesi, notify, onProfileUpdated }: Props) {
   const [profile, setProfile] = useState<ProfileInput>({
     nama: sesi.user.nama,
     profesi: sesi.user.profesi,
-    bidang: sesi.user.bidang,
-    unit: sesi.user.unit,
   });
-  const [masterBidang, setMasterBidang] = useState<string[]>([]);
   const [profileBusy, setProfileBusy] = useState(false);
   const [password, setPassword] = useState({ value: "", confirmation: "" });
   const [passwordError, setPasswordError] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
-
-  useEffect(() => {
-    api.getMasterBidang()
-      .then(setMasterBidang)
-      .catch((error: unknown) => notify(error instanceof Error ? error.message : String(error), true));
-  }, [api, notify]);
 
   const submitProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -42,15 +33,11 @@ export default function AccountPage({ sesi, notify, onProfileUpdated }: Props) {
       const updatedUser = await api.updateMyProfile(sesi, {
         nama: profile.nama.trim(),
         profesi: profile.profesi.trim(),
-        bidang: profile.bidang.trim(),
-        unit: profile.unit.trim(),
       });
       onProfileUpdated(updatedUser);
       setProfile({
         nama: updatedUser.nama,
         profesi: updatedUser.profesi,
-        bidang: updatedUser.bidang,
-        unit: updatedUser.unit,
       });
       notify("Profil berhasil diperbarui.");
     } catch (error) {
@@ -105,18 +92,17 @@ export default function AccountPage({ sesi, notify, onProfileUpdated }: Props) {
                 onChange={(event) => setProfile((current) => ({ ...current, profesi: event.target.value }))} />
             </div>
             <div>
-              <label htmlFor="account-bidang" className={label}>Bidang</label>
-              <select id="account-bidang" className={field} value={profile.bidang} required
-                onChange={(event) => setProfile((current) => ({ ...current, bidang: event.target.value }))}>
-                {!masterBidang.includes(profile.bidang) && <option value={profile.bidang}>{profile.bidang}</option>}
-                {masterBidang.map((bidang) => <option key={bidang} value={bidang}>{bidang}</option>)}
-                {!masterBidang.includes("Lainnya") && <option value="Lainnya">Lainnya</option>}
-              </select>
+              <span className={label}>Bidang</span>
+              <p className={`${field} min-h-10 border border-gray-700 bg-gray-900/60 text-gray-300`}>
+                {sesi.user.bidang || "Belum diisi"}
+              </p>
+              <p className="mt-1 text-xs text-gray-500">Bidang diturunkan dari Unit dan hanya dapat diubah Admin.</p>
             </div>
             <div>
-              <label htmlFor="account-unit" className={label}>Unit</label>
-              <input id="account-unit" className={field} value={profile.unit} required
-                onChange={(event) => setProfile((current) => ({ ...current, unit: event.target.value }))} />
+              <span className={label}>Unit</span>
+              <p className={`${field} min-h-10 border border-gray-700 bg-gray-900/60 text-gray-300`}>
+                {sesi.user.unit || "Belum dipetakan"}
+              </p>
             </div>
             <div>
               <label htmlFor="account-nrp" className={label}>NRP</label>

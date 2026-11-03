@@ -3,6 +3,7 @@ var CONFIG = {
   SHEET_USERS: 'Users',
   SHEET_SOSIALISASI: 'Sosialisasi',
   SHEET_MASTER_BIDANG: 'MasterBidang',
+  SHEET_MASTER_UNIT: 'MasterUnit',
   SESSION_SECONDS: 21600
 };
 

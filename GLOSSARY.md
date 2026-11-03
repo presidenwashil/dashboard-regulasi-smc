@@ -51,17 +51,21 @@ Program Kerja, Laporan Hasil, Surat Tugas, or other (typed manually).
 
 **Pemilik**:
 The hospital unit that owns a Dokumen (e.g. Direksi, SDM, IT, Casemix). It determines
-which Unit options apply.
+which Unit Dokumen options apply.
 
-**Unit**:
-A subsection beneath a Pemilik.
-_Avoid_: sub-unit, bagian
+**Unit Dokumen**:
+A Dokumen classification selected in relation to its Pemilik.
+_Avoid_: organizational Unit
 
 **Bidang**:
-A division or committee of the hospital (from a master list: Umum, SDM, Casemix, IT,
-Yanmed, Jangmed, Komite Mutu, …). Each User belongs to one Bidang; a Dokumen may list
-several related Bidang.
+A division or committee of the hospital (such as SDM, IT, Yanmed, or Komite Mutu).
+Each Bidang may contain multiple Unit Organisasi; a Dokumen may target multiple Bidang.
 _Avoid_: bidang/komite, division (in code naming)
+
+**Unit Organisasi**:
+A hospital organizational unit with exactly one parent Bidang. Each User belongs to
+one Unit Organisasi, and their Bidang is that Unit's parent.
+_Avoid_: Unit Dokumen, bagian
 
 **Status Dokumen**:
 Whether the Dokumen is `Baru` or a `Revisi`; a Revisi carries a revision number.

@@ -8,6 +8,9 @@ export type { RawDokumenRow } from "./rawShapes";
 
 export type Role = "Admin" | "User";
 
+export type MasterBidang = { id: number; name: string };
+export type MasterUnit = { id: number; name: string; bidangId: number; bidang: string };
+
 /** Status Akun: an account's access status (GLOSSARY.md). */
 export type StatusAkun = "Pending" | "Approved" | "Rejected" | "Inactive";
 
@@ -30,6 +33,10 @@ export type Dokumen = {
   unit: string;
   /** Split from the legacy comma-joined list; "-" placeholder becomes []. */
   bidang: string[];
+  /** Stable MasterBidang IDs used for access decisions. */
+  bidangIds: number[];
+  /** Whether the current User may edit this document, as decided by the server. */
+  canEdit?: boolean;
   statusDokumen: StatusDokumen;
   revisi: string | null;
   /** Publication date in milliseconds; empty becomes null. */
@@ -47,7 +54,9 @@ export type User = {
   nama: string;
   profesi: string;
   bidang: string;
+  bidangId: number | null;
   unit: string;
+  unitId: number | null;
   nrp: string;
   role: Role | string;
 };
@@ -58,7 +67,9 @@ export type AdminUser = {
   nama: string;
   profesi: string;
   bidang: string;
+  bidangId: number | null;
   unit: string;
+  unitId: number | null;
   nrp: string;
   status: string;
   role: string;
@@ -70,7 +81,9 @@ export type PendingUser = {
   nama: string;
   profesi: string;
   bidang: string;
+  bidangId: number | null;
   unit: string;
+  unitId: number | null;
   nrp: string;
 };
 
@@ -123,14 +136,13 @@ export type Sesi = { user: User; token: string };
 export type RegistrasiInput = {
   nama: string;
   profesi: string;
-  bidang: string;
-  unit: string;
+  unitId: number;
   nrp: string;
   password: string;
 };
 
-/** Self-service profile fields; identity and access status stay server-owned. */
-export type ProfileInput = Pick<User, "nama" | "profesi" | "bidang" | "unit">;
+/** Self-service profile fields; organization membership stays Admin-managed. */
+export type ProfileInput = Pick<User, "nama" | "profesi">;
 
 /** File payload: read client-side to base64 (existing upload contract). */
 export type FilePayload = { name: string; mimeType: string; data: string };
@@ -142,7 +154,7 @@ export type DokumenInput = {
   jenis: string;
   pemilik: string;
   unit: string;
-  bidang: string[];
+  bidangIds: number[];
   statusDokumen: "Baru" | "Revisi";
   revisi: string | null;
   tanggal: string | null;

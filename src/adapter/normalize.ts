@@ -60,6 +60,9 @@ export function rawRowsToDokumen(rows: RawDokumenRow[] | null | undefined): Doku
     pemilik: asText(row[4]),
     unit: asText(row[5]),
     bidang: splitJoinedList(row[6]),
+    bidangIds: asText(row[17]).split(",").map((value) => Number(value.trim()))
+      .filter((id) => Number.isInteger(id) && id > 0),
+    canEdit: row[16] === true || asText(row[16]).toLowerCase() === "true",
     statusDokumen:
       asText(row[7]) === "Revisi" ? "Revisi" : asText(row[7]) === "Baru" ? "Baru" : null,
     revisi: asText(row[8]) === "-" || asText(row[8]) === "" ? null : asText(row[8]),

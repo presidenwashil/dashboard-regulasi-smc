@@ -13,9 +13,17 @@ import SosialisasiPage from './pages/SosialisasiPage';
 import FormPage from './pages/FormPage';
 import ApprovalPage from './pages/ApprovalPage';
 import AccountPage from './pages/AccountPage';
+import MasterOrganisasiPage from './pages/MasterOrganisasiPage';
 import UserSosialisasiProgressPage from './pages/UserSosialisasiProgressPage';
 
-type TabId = 'dashboard' | 'sosialisasi' | 'form' | 'approval' | 'account' | 'progress-sosialisasi';
+type TabId =
+  | 'dashboard'
+  | 'sosialisasi'
+  | 'form'
+  | 'approval'
+  | 'master-organisasi'
+  | 'account'
+  | 'progress-sosialisasi';
 
 interface TabDef {
   id: TabId;
@@ -29,7 +37,8 @@ const TABS: TabDef[] = [
   { id: 'sosialisasi', label: 'Sosialisasi Dokumen', icon: 'ph-book-open-check' },
   { id: 'form', label: 'Input Dokumen Baru', icon: 'ph-file-plus' },
   { id: 'approval', label: 'Approval User', icon: 'ph-user-check', adminOnly: true },
-  { id: 'progress-sosialisasi', label: 'Progress Sosialisasi User', icon: 'ph-users-three' },
+  { id: 'master-organisasi', label: 'Master Organisasi', icon: 'ph-buildings', adminOnly: true },
+  { id: 'progress-sosialisasi', label: 'Progress Sosialisasi User', icon: 'ph-users-three', adminOnly: true },
 ];
 
 type AppProps = {
@@ -213,6 +222,9 @@ export default function App({ createAdapter = createDefaultAppApi }: AppProps) {
         />
       )}
       {tab === 'approval' && isAdmin && <ApprovalPage sesi={session} notify={notify} />}
+      {tab === 'master-organisasi' && isAdmin && (
+        <MasterOrganisasiPage sesi={session} notify={notify} />
+      )}
       {tab === 'account' && (
         <AccountPage sesi={session} notify={notify} onProfileUpdated={handleProfileUpdated} />
       )}

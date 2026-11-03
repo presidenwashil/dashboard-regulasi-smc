@@ -53,16 +53,16 @@ describe("mock fidelity: login and account lifecycle", () => {
 
   it("rejects registration for a duplicate NRP and short passwords", async () => {
     await expect(
-      api.registerUser({ nama: "Budi", profesi: "Perawat", bidang: "SDM", unit: "IGD", nrp: "0042", password: "rahasia" }),
+      api.registerUser({ nama: "Budi", profesi: "Perawat", unitId: 102, nrp: "0042", password: "rahasia" }),
     ).rejects.toThrow("NRP sudah terdaftar. Silakan login, atau hubungi Admin jika lupa password.");
     await expect(
-      api.registerUser({ nama: "Budi", profesi: "Perawat", bidang: "SDM", unit: "IGD", nrp: "7777", password: "12345" }),
+      api.registerUser({ nama: "Budi", profesi: "Perawat", unitId: 102, nrp: "7777", password: "12345" }),
     ).rejects.toThrow("Password minimal 6 karakter.");
   });
 
   it("registers a new account as Pending, which then cannot log in", async () => {
     await expect(
-      api.registerUser({ nama: "Budi", profesi: "Perawat", bidang: "SDM", unit: "IGD", nrp: "7777", password: "rahasia" }),
+      api.registerUser({ nama: "Budi", profesi: "Perawat", unitId: 102, nrp: "7777", password: "rahasia" }),
     ).resolves.toContain("Registrasi berhasil");
     await expect(api.loginUser("7777", "rahasia")).rejects.toThrow(
       "Akun Anda masih menunggu approval dari Admin.",
@@ -70,7 +70,7 @@ describe("mock fidelity: login and account lifecycle", () => {
   });
 
   it("returns the default master bidang list", async () => {
-    await expect(api.getMasterBidang()).resolves.toContain("Komite Mutu");
+    await expect(api.getMasterBidang()).resolves.toContainEqual({ id: 9, name: "Komite Mutu" });
     await expect(api.getMasterBidang()).resolves.toHaveLength(14);
   });
 
@@ -81,14 +81,12 @@ describe("mock fidelity: login and account lifecycle", () => {
     await expect(api.updateMyProfile(farahSesi, {
       nama: "Farah Baru",
       profesi: "Dokter Spesialis",
-      bidang: "Yanmed",
-      unit: "Poli",
       nrp: "0987",
     } as never)).resolves.toMatchObject({
       nama: "Farah Baru",
       profesi: "Dokter Spesialis",
       bidang: "Yanmed",
-      unit: "Poli",
+      unit: "IGD",
       nrp: "0042",
     });
 
@@ -96,8 +94,6 @@ describe("mock fidelity: login and account lifecycle", () => {
     await expect(api.updateMyProfile(otherSesi, {
       nama: "Budi",
       profesi: "Perawat",
-      bidang: "SDM",
-      unit: "IGD",
     })).resolves.toMatchObject({ nrp: "0987", nama: "Budi" });
     await expect(api.getAllUsers(await admin())).resolves.toEqual(
       expect.arrayContaining([
@@ -131,11 +127,9 @@ describe("mock fidelity: role gates and session handling", () => {
     await expect(api.resetUserPassword(sesi, 5, "pw")).rejects.toThrow("Akses ditolak.");
   });
 
-  it("allows a User account to read the sosialisasi summary but still denies detail and Rekap PDF", async () => {
+  it("restricts the global sosialisasi audit summary, detail, and Rekap PDF to Admin", async () => {
     const sesi = await farah();
-    const summary = await api.getSosialisasiSummary(sesi);
-    expect(summary.totalUser).toBe(3);
-    expect(summary.approvedUsers.map((u) => u.nrp).sort()).toEqual(["0042", "0987", "admin01"]);
+    await expect(api.getSosialisasiSummary(sesi)).rejects.toThrow("Akses ditolak.");
     await expect(api.getSosialisasiDetail(sesi, 3)).rejects.toThrow("Akses ditolak.");
     await expect(api.generateSosialisasiPdf(sesi, 3)).rejects.toThrow("Akses ditolak.");
   });
@@ -163,7 +157,7 @@ describe("mock fidelity: role gates and session handling", () => {
     const sesi = await admin();
     const pending = await api.getPendingUsers(sesi);
     const sinta = pending.find((u) => u.nrp === "1111")!;
-    await expect(api.setUserStatus(sesi, sinta.rowIndex, "Approved")).resolves.toContain("Approved");
+    await expect(api.setUserStatus(sesi, sinta.rowIndex, "Approved", 104)).resolves.toContain("Approved");
     await expect(api.loginUser("1111", "demo-sinta")).resolves.toMatchObject({ user: { role: "User" } });
   });
 
@@ -196,7 +190,7 @@ describe("mock fidelity: getAllData server contract (gas/Documents.gs)", () => {
   });
 
   it("answers a valid Sesi with a bare rows array (no envelope), newest sheet row first", async () => {
-    const sesi = await farah();
+    const sesi = await admin();
     const raw = backend.getAllData(sesi.token) as unknown[][];
     // The real getAllData returns `rows` directly — an envelope in the mock
     // would be a contract the production client cannot rely on.
@@ -211,12 +205,12 @@ describe("mock fidelity: getAllData server contract (gas/Documents.gs)", () => {
   it("normalizes the mock's bare array at the adapter: token in, Dokumen out", async () => {
     const sesi = await farah();
     const docs = await api.getAllData(sesi);
-    expect(docs).toHaveLength(4);
+    expect(docs).toHaveLength(3);
     expect(docs[0]).toMatchObject({ judul: "SK Direktur Kebijakan Casemix", docId: 5 });
   });
 
   it("surfaces the real server's invalid-Sesi throw as centralized expiry", async () => {
-    const sesi = await farah();
+    const sesi = await admin();
     const onExpired: string[] = [];
     const expiryApi = createApi(backend, { onSessionExpired: () => onExpired.push("expired") });
     await expect(expiryApi.getAllData({ ...sesi, token: "token-palsu" })).rejects.toMatchObject({
@@ -229,7 +223,7 @@ describe("mock fidelity: getAllData server contract (gas/Documents.gs)", () => {
 
 describe("mock fidelity: documents", () => {
   it("pins all seeded document states: Baru/Revisi, Aktif/Non-Aktif/Dicabut, with/without files", async () => {
-    const sesi = await farah();
+    const sesi = await admin();
     const docs = await api.getAllData(sesi);
     const byJudul = Object.fromEntries(docs.map((d) => [d.judul, d]));
     expect(byJudul["SPO Data Entry Data Casemix"]).toMatchObject({ statusDokumen: "Baru", statusBerlaku: "Aktif", pdfUrl: null, wordUrl: null });
@@ -246,7 +240,7 @@ describe("mock fidelity: documents", () => {
     const sesi = await admin();
     await api.saveDataWithFiles(sesi, {
       judul: "SPO Compliance Baru", nomor: "SPO/IT/010", jenis: "SPO", pemilik: "IT", unit: "Data Center",
-      bidang: ["IT"], statusDokumen: "Baru", revisi: null, tanggal: "2026-10-01",
+      bidangIds: [4], statusDokumen: "Baru", revisi: null, tanggal: "2026-10-01",
       akreditasi: [], keterangan: "", statusBerlaku: "Aktif",
       pdfFile: { name: "spo.pdf", mimeType: "application/pdf", data: "Zm9v" },
       wordFile: null,
@@ -263,7 +257,7 @@ describe("mock fidelity: documents", () => {
     await expect(
       api.updateDataWithFiles(
         sesi,
-        { ...doc, judul: "SPO Data Entry Data Casemix (revisi naskah)", bidang: doc.bidang, akreditasi: doc.akreditasi, statusDokumen: "Revisi" as const, tanggal: doc.tanggal ? new Date(doc.tanggal).toISOString().slice(0, 10) : null, pdfFile: null, wordFile: null },
+        { ...doc, judul: "SPO Data Entry Data Casemix (revisi naskah)", bidangIds: doc.bidangIds, akreditasi: doc.akreditasi, statusDokumen: "Revisi" as const, tanggal: doc.tanggal ? new Date(doc.tanggal).toISOString().slice(0, 10) : null, pdfFile: null, wordFile: null },
         doc.docId!,
         { existingPdfUrl: null, existingWordUrl: null },
       ),
@@ -391,7 +385,7 @@ describe("mock fidelity: canonical NRP key (gas/Sosialisasi.gs nrpKey_)", () => 
     );
     const sesi = await mixed.loginUser("0042", "demo-farah");
 
-    await expect(mixed.getMyReadDocs(sesi)).resolves.toEqual([3, 4]);
+    await expect(mixed.getMyReadDocs(sesi)).resolves.toEqual([3]);
   });
 
   it("keys the summary read map on the users-sheet display NRP and keeps the first confirmation", async () => {
@@ -423,11 +417,210 @@ describe("mock fidelity: canonical NRP key (gas/Sosialisasi.gs nrpKey_)", () => 
 });
 
 describe("mock fidelity: user statistics", () => {
-  it("counts approved users by bidang and unit, defaulting empties to Lainnya", async () => {
+  it("counts approved users by their mapped bidang and unit", async () => {
     const sesi = await farah();
     const stats = await api.getUserStats(sesi);
     expect(stats.totalUser).toBe(3);
     expect(stats.byBidang).toEqual(expect.objectContaining({ IT: 1, Yanmed: 1, SDM: 1 }));
-    expect(stats.byUnit).toEqual(expect.objectContaining({ Lainnya: 1, IGD: 1, IT: 1 }));
+    expect(stats.byUnit).toEqual(expect.objectContaining({ "Unit SDM": 1, IGD: 1, IT: 1 }));
+  });
+});
+
+describe("mock fidelity: master organisasi writes (gas/Master.gs)", () => {
+  it("rejects every master write from a User and an unknown Sesi", async () => {
+    const sesi = await farah();
+    await expect(api.createMasterBidang(sesi, "Baru")).rejects.toThrow("Akses ditolak.");
+    await expect(api.renameMasterBidang(sesi, 1, "Umum Baru")).rejects.toThrow("Akses ditolak.");
+    await expect(api.deleteMasterBidang(sesi, 3)).rejects.toThrow("Akses ditolak.");
+    await expect(api.createMasterUnit(sesi, "Baru", 3)).rejects.toThrow("Akses ditolak.");
+    await expect(api.renameMasterUnit(sesi, 103, "SDM Baru")).rejects.toThrow("Akses ditolak.");
+    await expect(api.reparentMasterUnit(sesi, 103, 3)).rejects.toThrow("Akses ditolak.");
+    await expect(api.deleteMasterUnit(sesi, 103)).rejects.toThrow("Akses ditolak.");
+    await expect(
+      api.createMasterBidang({ ...sesi, token: "token-palsu" }, "Baru"),
+    ).rejects.toMatchObject({ sessionExpired: true });
+  });
+
+  it("lists master units with their parent Bidang name", async () => {
+    await expect(api.getMasterUnit()).resolves.toContainEqual({
+      id: 102,
+      name: "IGD",
+      bidangId: 7,
+      bidang: "Yanmed",
+    });
+  });
+
+  it("creates and renames Bidang, trimming names and assigning the next stable ID", async () => {
+    const sesi = await admin();
+    await expect(api.createMasterBidang(sesi, "  Klinik Baru  ")).resolves.toEqual({
+      id: 15,
+      name: "Klinik Baru",
+    });
+    await expect(api.createMasterBidang(sesi, "   ")).rejects.toThrow("Nama Bidang wajib diisi.");
+    await expect(api.renameMasterBidang(sesi, 15, "Klinik Utama")).resolves.toEqual({
+      id: 15,
+      name: "Klinik Utama",
+    });
+    await expect(api.renameMasterBidang(sesi, 999, "X")).rejects.toThrow("Bidang tidak ditemukan.");
+    await expect(api.getMasterBidang()).resolves.toContainEqual({ id: 15, name: "Klinik Utama" });
+  });
+
+  it("creates Units under an existing Bidang and allows the same Unit name under a different Bidang", async () => {
+    const sesi = await admin();
+    await expect(api.createMasterUnit(sesi, "  IGD  ", 3)).resolves.toEqual({
+      id: 107,
+      name: "IGD",
+      bidangId: 3,
+      bidang: "Casemix",
+    });
+    await expect(api.createMasterUnit(sesi, "IGD", 7)).resolves.toEqual({
+      id: 108,
+      name: "IGD",
+      bidangId: 7,
+      bidang: "Yanmed",
+    });
+    await expect(api.createMasterUnit(sesi, "X", 999)).rejects.toThrow(
+      "Bidang induk harus dipilih dari MasterBidang.",
+    );
+    await expect(api.createMasterUnit(sesi, " ", 3)).rejects.toThrow("Nama Unit wajib diisi.");
+  });
+
+  it("renames and reparents a Unit while keeping its ID", async () => {
+    const sesi = await admin();
+    await expect(api.renameMasterUnit(sesi, 102, "Instalasi Gawat Darurat")).resolves.toEqual({
+      id: 102,
+      name: "Instalasi Gawat Darurat",
+      bidangId: 7,
+      bidang: "Yanmed",
+    });
+    await expect(api.reparentMasterUnit(sesi, 102, 3)).resolves.toEqual({
+      id: 102,
+      name: "Instalasi Gawat Darurat",
+      bidangId: 3,
+      bidang: "Casemix",
+    });
+    await expect(api.renameMasterUnit(sesi, 999, "X")).rejects.toThrow("Unit tidak ditemukan.");
+    await expect(api.reparentMasterUnit(sesi, 999, 3)).rejects.toThrow("Unit tidak ditemukan.");
+    await expect(api.reparentMasterUnit(sesi, 102, 999)).rejects.toThrow(
+      "Bidang induk harus dipilih dari MasterBidang.",
+    );
+  });
+
+  it("never reuses a deleted Bidang or Unit ID", async () => {
+    const sesi = await admin();
+    const bidang = await api.createMasterBidang(sesi, "Sementara");
+    expect(bidang.id).toBe(15);
+    await expect(api.deleteMasterBidang(sesi, bidang.id)).resolves.toBe("Bidang berhasil dihapus.");
+    await expect(api.createMasterBidang(sesi, "Pengganti")).resolves.toMatchObject({ id: 16 });
+
+    const unit = await api.createMasterUnit(sesi, "Unit Sementara", 3);
+    expect(unit.id).toBe(107);
+    await expect(api.deleteMasterUnit(sesi, unit.id)).resolves.toBe(
+      "Unit Organisasi berhasil dihapus.",
+    );
+    await expect(api.createMasterUnit(sesi, "Unit Pengganti", 3)).resolves.toMatchObject({ id: 108 });
+  });
+
+  it("blocks deleting a Bidang still referenced by a Unit, a document target, or an uploader snapshot", async () => {
+    const sesi = await admin();
+    await expect(api.deleteMasterBidang(sesi, 7)).rejects.toThrow(
+      "Bidang tidak dapat dihapus karena masih memiliki Unit Organisasi.",
+    );
+    await expect(api.deleteMasterBidang(sesi, 1)).rejects.toThrow(
+      "Bidang tidak dapat dihapus karena masih menjadi target Dokumen.",
+    );
+
+    // Admin's Unit sits under IT (4); saving now pins Bidang 4 as the uploader snapshot.
+    await api.saveDataWithFiles(sesi, {
+      judul: "Dokumen Admin",
+      nomor: "SPO/IT/010",
+      jenis: "SPO",
+      pemilik: "IT",
+      unit: "IT",
+      bidangIds: [],
+      statusDokumen: "Baru",
+      revisi: null,
+      tanggal: null,
+      akreditasi: [],
+      keterangan: "",
+      statusBerlaku: "Aktif",
+      pdfFile: null,
+      wordFile: null,
+    });
+    await api.reparentMasterUnit(sesi, 101, 3);
+    await expect(api.deleteMasterBidang(sesi, 4)).rejects.toThrow(
+      "Bidang tidak dapat dihapus karena masih menjadi snapshot Bidang pengunggah Dokumen.",
+    );
+    await expect(api.deleteMasterBidang(sesi, 999)).rejects.toThrow("Bidang tidak ditemukan.");
+  });
+
+  it("deletes an unreferenced Bidang", async () => {
+    const sesi = await admin();
+    await expect(api.deleteMasterBidang(sesi, 3)).resolves.toBe("Bidang berhasil dihapus.");
+    await expect(api.getMasterBidang()).resolves.not.toContainEqual({ id: 3, name: "Casemix" });
+    await expect(api.deleteMasterBidang(sesi, 3)).rejects.toThrow("Bidang tidak ditemukan.");
+  });
+
+  it("blocks deleting a Unit still used by a User and deletes an unused Unit", async () => {
+    const sesi = await admin();
+    await expect(api.deleteMasterUnit(sesi, 102)).rejects.toThrow(
+      "Unit tidak dapat dihapus karena masih digunakan oleh User.",
+    );
+    await expect(api.deleteMasterUnit(sesi, 103)).resolves.toBe(
+      "Unit Organisasi berhasil dihapus.",
+    );
+    await expect(api.deleteMasterUnit(sesi, 103)).rejects.toThrow("Unit tidak ditemukan.");
+  });
+
+  it("reparents a Unit, changing current User Bidang resolution without rewriting document target IDs or uploader snapshots", async () => {
+    const seed = defaultMockSeed();
+    const localBackend = createMockBackend(seed);
+    const localApi = createApi(localBackend);
+    const adminSesi = await localApi.loginUser("admin01", "demo-ganti-saya");
+    const farahSesi = await localApi.loginUser("0042", "demo-farah");
+
+    // Farah is in IGD (102, Bidang 7). Target Umum (1) so the snapshot and the
+    // target are distinguishable in the stored row.
+    await localApi.saveDataWithFiles(farahSesi, {
+      judul: "Dokumen Farah",
+      nomor: "SPO/YANMED/001",
+      jenis: "SPO",
+      pemilik: "Yanmed",
+      unit: "IGD",
+      bidangIds: [1],
+      statusDokumen: "Baru",
+      revisi: null,
+      tanggal: null,
+      akreditasi: [],
+      keterangan: "",
+      statusBerlaku: "Aktif",
+      pdfFile: null,
+      wordFile: null,
+    });
+    const savedRow = seed.documents.at(-1)!;
+    expect(savedRow[17]).toBe("1");
+    expect(savedRow[18]).toBe(7);
+
+    await expect(localApi.reparentMasterUnit(adminSesi, 102, 3)).resolves.toMatchObject({
+      id: 102,
+      bidangId: 3,
+      bidang: "Casemix",
+    });
+    await expect(localApi.getMasterUnit()).resolves.toContainEqual({
+      id: 102,
+      name: "IGD",
+      bidangId: 3,
+      bidang: "Casemix",
+    });
+    // Current User Bidang resolution follows the new parent...
+    await expect(localApi.getAllUsers(adminSesi)).resolves.toContainEqual(
+      expect.objectContaining({ nrp: "0042", bidangId: 3, bidang: "Casemix", unitId: 102 }),
+    );
+    // ...while the document keeps its target IDs and uploader snapshot.
+    expect(seed.documents.at(-1)![17]).toBe("1");
+    expect(seed.documents.at(-1)![18]).toBe(7);
+    await expect(localApi.deleteMasterBidang(adminSesi, 7)).rejects.toThrow(
+      "Bidang tidak dapat dihapus karena masih menjadi snapshot Bidang pengunggah Dokumen.",
+    );
   });
 });
