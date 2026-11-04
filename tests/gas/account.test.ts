@@ -42,7 +42,7 @@ function setup() {
   const unitSheet = {
     getDataRange: () => ({ getValues: () => unitRows.map((row) => [...row]) }),
   };
-  const ctx = loadGas(["config/Config.gs", "config/Schema.gs", "lib/Password.gs", "lib/Nrp.gs", "lib/Timestamp.gs", "lib/Html.gs", "lib/Bidang.gs", "repository/SheetRepo.gs", "Auth.gs", "Users.gs", "Master.gs"], {
+  const ctx = loadGas(["config/Config.gs", "config/Schema.gs", "lib/Password.gs", "lib/Nrp.gs", "lib/Timestamp.gs", "lib/Html.gs", "lib/Bidang.gs", "repository/SheetRepo.gs", "service/AuthService.gs", "service/UsersService.gs", "service/OrganizationService.gs"], {
     SpreadsheetApp: {
       getActiveSpreadsheet: () => ({
         getSheetByName: (name: string) => name === "MasterBidang" ? masterSheet : name === "MasterUnit" ? unitSheet : sheet,
@@ -154,3 +154,5 @@ describe("self-service account endpoints", () => {
     expect(ctx.loginUser("0042", "demo-farah").success).toBe(true);
   });
 });
+
+

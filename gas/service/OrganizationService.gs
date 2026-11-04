@@ -62,7 +62,7 @@ function getMasterUnitSheet_() {
   return sheet;
 }
 
-function getMasterBidang() {
+function getMasterBidang_() {
   try {
     return { success: true, data: getMasterBidangValues_() };
   } catch (err) {
@@ -134,7 +134,7 @@ function getMasterUnitValues_(masterBidang) {
   return list;
 }
 
-function getMasterUnit() {
+function getMasterUnit_() {
   try {
     var bidang = getMasterBidangValues_();
     return { success: true, data: getMasterUnitValues_(bidang) };
@@ -194,7 +194,7 @@ function unitHasUserReference_(unitId) {
   return false;
 }
 
-function createMasterBidang(token, name) {
+function createMasterBidang_(token, name) {
   var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
@@ -219,7 +219,7 @@ function createMasterBidang(token, name) {
   }
 }
 
-function renameMasterBidang(token, id, name) {
+function renameMasterBidang_(token, id, name) {
   var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
@@ -252,7 +252,7 @@ function renameMasterBidang(token, id, name) {
   }
 }
 
-function deleteMasterBidang(token, id) {
+function deleteMasterBidang_(token, id) {
   var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
@@ -303,7 +303,7 @@ function deleteMasterBidang(token, id) {
   }
 }
 
-function createMasterUnit(token, name, bidangId) {
+function createMasterUnit_(token, name, bidangId) {
   var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
@@ -337,7 +337,7 @@ function createMasterUnit(token, name, bidangId) {
   }
 }
 
-function renameMasterUnit(token, id, name) {
+function renameMasterUnit_(token, id, name) {
   var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
@@ -376,7 +376,7 @@ function renameMasterUnit(token, id, name) {
   }
 }
 
-function reparentMasterUnit(token, id, bidangId) {
+function reparentMasterUnit_(token, id, bidangId) {
   var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
@@ -421,7 +421,7 @@ function reparentMasterUnit(token, id, bidangId) {
   }
 }
 
-function deleteMasterUnit(token, id) {
+function deleteMasterUnit_(token, id) {
   var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
@@ -453,3 +453,14 @@ function deleteMasterUnit(token, id) {
     return { success: false, message: 'Gagal menghapus Unit: ' + err.toString() };
   }
 }
+
+function getMasterBidang() { return getMasterBidang_.apply(this, arguments); }
+function getMasterUnit() { return getMasterUnit_.apply(this, arguments); }
+function createMasterBidang() { return createMasterBidang_.apply(this, arguments); }
+function renameMasterBidang() { return renameMasterBidang_.apply(this, arguments); }
+function deleteMasterBidang() { return deleteMasterBidang_.apply(this, arguments); }
+function createMasterUnit() { return createMasterUnit_.apply(this, arguments); }
+function renameMasterUnit() { return renameMasterUnit_.apply(this, arguments); }
+function reparentMasterUnit() { return reparentMasterUnit_.apply(this, arguments); }
+function deleteMasterUnit() { return deleteMasterUnit_.apply(this, arguments); }
+

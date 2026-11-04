@@ -31,29 +31,6 @@ function uploadDocFiles_(data, fallbackPdf, fallbackWord) {
   return { pdfUrl: pdfUrl, wordUrl: wordUrl };
 }
 
-function currentDocumentActor_(session) {
-  var nrp = (session.nrp || '').toString().trim();
-  var sheet = getUsersSheet_();
-  var rows = sheet.getDataRange().getValues();
-  var unitIdColumn = ensureUsersUnitIdColumn_(sheet);
-  var masterBidang = getMasterBidangValues_();
-  for (var i = 1; i < rows.length; i++) {
-    if ((rows[i][5] || '').toString().trim() !== nrp) continue;
-    if (rows[i][8] !== 'Approved') return null;
-    var organization = userOrganizationByUnitId_(rows[i][unitIdColumn - 1], masterBidang);
-    return {
-      nrp: nrp,
-      nama: rows[i][1],
-      bidang: organization ? organization.bidang : '',
-      bidangId: organization ? organization.bidangId : null,
-      unit: organization ? organization.unit : '',
-      unitId: organization ? organization.unitId : null,
-      status: rows[i][8],
-      role: (rows[i][9] || '').toString(),
-    };
-  }
-  return null;
-}
 
 function ensureDocMetadataHeaders_(sheet) {
   var header = sheet.getRange(1, 16, 1, 4).getValues()[0];
@@ -63,7 +40,7 @@ function ensureDocMetadataHeaders_(sheet) {
   if (!header[3]) sheet.getRange(1, 19).setValue('UploaderBidangID');
 }
 
-function saveDataWithFiles(token, data) {
+function saveDataWithFiles_(token, data) {
   var auth = requireAccess_(token);
   if (auth.error) return auth.error;
 
@@ -100,7 +77,7 @@ function saveDataWithFiles(token, data) {
   }
 }
 
-function updateDataWithFiles(token, data, rowIndex) {
+function updateDataWithFiles_(token, data, rowIndex) {
   var auth = requireAccess_(token);
   if (auth.error) return auth.error;
 
@@ -151,7 +128,7 @@ function updateDataWithFiles(token, data, rowIndex) {
   }
 }
 
-function getAllData(token) {
+function getAllData_(token) {
   var auth = requireAccess_(token);
   if (auth.error) throw new Error(auth.error.message);
 
@@ -179,3 +156,9 @@ function getAllData(token) {
   visibleRows.reverse();
   return visibleRows;
 }
+
+function saveDataWithFiles() { return saveDataWithFiles_.apply(this, arguments); }
+function updateDataWithFiles() { return updateDataWithFiles_.apply(this, arguments); }
+function getAllData() { return getAllData_.apply(this, arguments); }
+
+

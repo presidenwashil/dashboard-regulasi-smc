@@ -27,3 +27,6 @@ gas/Index.html
 *.njsproj
 *.sln
 *.sw?
+
+# Command Code
+.commandcode/

@@ -86,7 +86,7 @@ function setup(documents: Row[] = [DOC_HEADER]) {
     MasterUnit: units.sheet,
   };
   const ctx = loadGas(
-    ['config/Config.gs', 'config/Schema.gs', 'lib/Password.gs', 'lib/Nrp.gs', 'lib/Timestamp.gs', 'lib/Html.gs', 'lib/Bidang.gs', 'repository/SheetRepo.gs', 'Auth.gs', 'Users.gs', 'Master.gs', 'Documents.gs'],
+    ['config/Config.gs', 'config/Schema.gs', 'lib/Password.gs', 'lib/Nrp.gs', 'lib/Timestamp.gs', 'lib/Html.gs', 'lib/Bidang.gs', 'repository/SheetRepo.gs', 'service/AuthService.gs', 'service/UsersService.gs', 'service/OrganizationService.gs', 'service/DocumentsService.gs'],
     {
       SpreadsheetApp: {
         getActiveSpreadsheet: () => ({
@@ -226,3 +226,5 @@ describe('document create/update authorization', () => {
     });
   });
 });
+
+

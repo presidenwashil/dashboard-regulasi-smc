@@ -63,7 +63,7 @@ function requireAccess_(token, role) {
   return { session: session };
 }
 
-function registerUser(data) {
+function registerUser_(data) {
   try {
     var nrp = (data.nrp || "").toString().trim();
     var nama = (data.nama || "").toString().trim();
@@ -121,7 +121,7 @@ function registerUser(data) {
   }
 }
 
-function loginUser(nrp, password) {
+function loginUser_(nrp, password) {
   try {
     nrp = (nrp || "").toString().trim();
     var rows = getUsersSheet_().getDataRange().getValues();
@@ -179,7 +179,52 @@ function loginUser(nrp, password) {
   }
 }
 
-function logoutSession(token) {
+function logoutSession_(token) {
   CacheService.getScriptCache().remove(token);
   return { success: true };
 }
+
+function registerUser() { return registerUser_.apply(this, arguments); }
+function loginUser() { return loginUser_.apply(this, arguments); }
+function logoutSession() { return logoutSession_.apply(this, arguments); }
+
+
+function requireCurrentAdmin_(token) {
+  var auth = requireAccess_(token);
+  if (auth.error) return auth;
+
+  var nrp = (auth.session.nrp || '').toString().trim();
+  var rows = getUsersSheet_().getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if ((rows[i][5] || '').toString().trim() !== nrp) continue;
+    if (rows[i][8] !== 'Approved' || rows[i][9] !== 'Admin') {
+      return { error: { success: false, message: 'Akses ditolak.' } };
+    }
+    return auth;
+  }
+  return { error: { success: false, message: 'Akses ditolak.' } };
+}
+function currentDocumentActor_(session) {
+  var nrp = (session.nrp || '').toString().trim();
+  var sheet = getUsersSheet_();
+  var rows = sheet.getDataRange().getValues();
+  var unitIdColumn = ensureUsersUnitIdColumn_(sheet);
+  var masterBidang = getMasterBidangValues_();
+  for (var i = 1; i < rows.length; i++) {
+    if ((rows[i][5] || '').toString().trim() !== nrp) continue;
+    if (rows[i][8] !== 'Approved') return null;
+    var organization = userOrganizationByUnitId_(rows[i][unitIdColumn - 1], masterBidang);
+    return {
+      nrp: nrp,
+      nama: rows[i][1],
+      bidang: organization ? organization.bidang : '',
+      bidangId: organization ? organization.bidangId : null,
+      unit: organization ? organization.unit : '',
+      unitId: organization ? organization.unitId : null,
+      status: rows[i][8],
+      role: (rows[i][9] || '').toString(),
+    };
+  }
+  return null;
+}
+

@@ -64,7 +64,7 @@ function setup(fixture: { users?: Row[]; sosialisasi?: Row[]; docs?: Row[] } = {
     MasterUnit: units.sheet,
   };
   const ctx = loadGas(
-    ['config/Config.gs', 'config/Schema.gs', 'lib/Password.gs', 'lib/Nrp.gs', 'lib/Timestamp.gs', 'lib/Html.gs', 'lib/Bidang.gs', 'repository/SheetRepo.gs', 'Auth.gs', 'Users.gs', 'Master.gs', 'Documents.gs', 'Sosialisasi.gs'],
+    ['config/Config.gs', 'config/Schema.gs', 'lib/Password.gs', 'lib/Nrp.gs', 'lib/Timestamp.gs', 'lib/Html.gs', 'lib/Bidang.gs', 'repository/SheetRepo.gs', 'service/AuthService.gs', 'service/UsersService.gs', 'service/OrganizationService.gs', 'service/DocumentsService.gs', 'service/SosialisasiService.gs'],
     {
       SpreadsheetApp: {
         getActiveSpreadsheet: () => ({
@@ -336,3 +336,5 @@ describe('buildSosialisasiDetail_ via getSosialisasiDetail (seam: fungsi publik)
     });
   });
 });
+
+
