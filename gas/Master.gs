@@ -62,31 +62,6 @@ function getMasterUnitSheet_() {
   return sheet;
 }
 
-function masterColumn_(header, name) {
-  var key = String(name).trim().toLowerCase();
-  for (var i = 0; i < header.length; i++) {
-    if (String(header[i] || '').trim().toLowerCase() === key) return i;
-  }
-  return -1;
-}
-
-function masterNextColumn_(header) {
-  var last = 0;
-  for (var i = 0; i < header.length; i++) {
-    if (String(header[i] || '').trim() !== '') last = i + 1;
-  }
-  return last + 1;
-}
-
-function normalizeBidangKey_(value) {
-  return (value === null || value === undefined ? '' : String(value)).trim().toLowerCase();
-}
-
-function masterRowColumn_(header, name, fallback) {
-  var column = masterColumn_(header, name);
-  return column >= 0 ? column : fallback;
-}
-
 function getMasterBidang() {
   try {
     return { success: true, data: getMasterBidangValues_() };
@@ -168,24 +143,6 @@ function getMasterUnit() {
   }
 }
 
-function masterBidangById_(value, master) {
-  var id = Number(value);
-  if (!Number.isInteger(id) || id <= 0) return null;
-  for (var i = 0; i < master.length; i++) {
-    if (master[i].id === id) return master[i];
-  }
-  return null;
-}
-
-function masterUnitById_(value, master) {
-  var id = Number(value);
-  if (!Number.isInteger(id) || id <= 0) return null;
-  for (var i = 0; i < master.length; i++) {
-    if (master[i].id === id) return master[i];
-  }
-  return null;
-}
-
 function userOrganizationByUnitId_(unitId, masterBidang) {
   var unit = masterUnitById_(unitId, getMasterUnitValues_(masterBidang));
   if (!unit) return null;
@@ -198,67 +155,6 @@ function userOrganizationByUnitId_(unitId, masterBidang) {
 }
 
 /* ==================== MASTER WRITES (Admin) ==================== */
-
-function withMasterLock_(action) {
-  var lock = LockService.getScriptLock();
-  lock.waitLock(5000);
-  try {
-    return action();
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function masterIdHighWaterKey_(kind) {
-  return kind === 'bidang' ? 'MASTER_BIDANG_ID_HIGH_WATER' : 'MASTER_UNIT_ID_HIGH_WATER';
-}
-
-/**
- * Allocate the next stable ID. The high-water mark lives in Script
- * Properties, so deleting the highest row can never cause its ID to be
- * reused. Existing rows are folded in for the first allocation on a sheet
- * that predates the property.
- */
-function nextMasterId_(kind, existingIds) {
-  var properties = PropertiesService.getScriptProperties();
-  var key = masterIdHighWaterKey_(kind);
-  var stored = Number(properties.getProperty(key) || 0);
-  var highest = Number.isInteger(stored) && stored > 0 ? stored : 0;
-  for (var i = 0; i < existingIds.length; i++) {
-    var id = Number(existingIds[i]);
-    if (Number.isInteger(id) && id > highest) highest = id;
-  }
-  var next = highest + 1;
-  properties.setProperty(key, String(next));
-  return next;
-}
-
-function masterRowForHeader_(header, values) {
-  var row = [];
-  for (var i = 0; i < header.length; i++) {
-    var key = String(header[i] || '').trim().toLowerCase();
-    row.push(Object.prototype.hasOwnProperty.call(values, key) ? values[key] : '');
-  }
-  return row;
-}
-
-function findMasterRow_(sheet, idColumn, id) {
-  var rows = sheet.getDataRange().getValues();
-  for (var i = 1; i < rows.length; i++) {
-    if (Number(rows[i][idColumn]) === id) {
-      return { rowNumber: i + 1, values: rows[i] };
-    }
-  }
-  return null;
-}
-
-function masterIdList_(value) {
-  var text = value === null || value === undefined ? '' : String(value).trim();
-  if (!text || text === '-') return [];
-  return text.split(',').map(function (entry) {
-    return entry.trim();
-  }).filter(Boolean);
-}
 
 function documentBidangReferences_(bidangId) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_DOCS);

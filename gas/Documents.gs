@@ -1,7 +1,7 @@
 function getDocsSheet_() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_DOCS);
   if (!sheet) {
-    throw new Error('Sheet dokumen "' + CONFIG.SHEET_DOCS + '" tidak ditemukan. Periksa CONFIG.SHEET_DOCS di Code.gs.');
+    throw new Error('Sheet dokumen "' + CONFIG.SHEET_DOCS + '" tidak ditemukan. Periksa CONFIG.SHEET_DOCS di config/Config.gs.');
   }
   return sheet;
 }
@@ -53,67 +53,6 @@ function currentDocumentActor_(session) {
     };
   }
   return null;
-}
-
-function documentBidangList_(value) {
-  if (Array.isArray(value)) {
-    return value.map(function (entry) { return (entry || '').toString().trim(); }).filter(Boolean);
-  }
-  var text = value === null || value === undefined ? '' : String(value).trim();
-  if (!text || text === '-') return [];
-  return text.split(',').map(function (entry) { return entry.trim(); }).filter(Boolean);
-}
-
-function normalizeDocumentTargets_(value, master) {
-  var targets = documentBidangList_(value);
-  var canonical = [];
-  for (var i = 0; i < targets.length; i++) {
-    var bidang = masterBidangById_(targets[i], master);
-    if (!bidang) return null;
-    if (!canonical.some(function (current) { return current.id === bidang.id; })) canonical.push(bidang);
-  }
-  return canonical;
-}
-
-function isValidCurrentBidang_(actor, master) {
-  return Boolean(masterBidangById_(actor.bidangId, master));
-}
-
-function canReadDocument_(row, actor, master) {
-  if (!actor || actor.status !== 'Approved') return false;
-  if (actor.role === 'Admin') return true;
-
-  var rawTargetIds = row[17] === null || row[17] === undefined ? '' : String(row[17]).trim();
-  var rawLegacyTargets = row[6] === null || row[6] === undefined ? '' : String(row[6]).trim();
-  var hasTargets = (rawTargetIds && rawTargetIds !== '-') ||
-    (rawLegacyTargets && rawLegacyTargets !== '-');
-  if (!hasTargets) return true;
-
-  var targets = documentBidangList_(rawTargetIds);
-  var hasGeneralTarget = targets.some(function (target) {
-    var bidang = masterBidangById_(target, master);
-    return Boolean(bidang) && normalizeBidangKey_(bidang.name) === 'umum';
-  });
-  if (hasGeneralTarget) return true;
-  if (!isValidCurrentBidang_(actor, master)) return false;
-
-  var matchesTarget = targets.some(function (target) {
-    var bidang = masterBidangById_(target, master);
-    return Boolean(bidang) && bidang.id === Number(actor.bidangId);
-  });
-  var uploaderBidangId = Number(row[18]);
-  return matchesTarget || (
-    Number.isInteger(uploaderBidangId) &&
-    uploaderBidangId > 0 &&
-    uploaderBidangId === Number(actor.bidangId)
-  );
-}
-
-function canEditDocument_(row, actor, master) {
-  if (!actor || actor.status !== 'Approved') return false;
-  if (actor.role === 'Admin') return true;
-  return (row[15] || '').toString().trim() === actor.nrp &&
-    canReadDocument_(row, actor, master);
 }
 
 function ensureDocMetadataHeaders_(sheet) {

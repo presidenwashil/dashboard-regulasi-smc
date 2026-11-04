@@ -91,7 +91,7 @@ function setup() {
     Database_Regulasi: makeSheet(documentRows),
   };
 
-  const ctx = loadGas(["Code.gs", "Auth.gs", "Users.gs", "Master.gs"], {
+  const ctx = loadGas(["config/Config.gs", "config/Schema.gs", "lib/Password.gs", "lib/Nrp.gs", "lib/Timestamp.gs", "lib/Html.gs", "lib/Bidang.gs", "repository/SheetRepo.gs", "Auth.gs", "Users.gs", "Master.gs"], {
     SpreadsheetApp: {
       getActiveSpreadsheet: () => ({
         getSheetByName: (name: string) => sheets[name] ?? null,

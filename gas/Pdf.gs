@@ -1,12 +1,3 @@
-function escapeHtml_(value) {
-  return String(value == null ? '' : value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 function generateSosialisasiPdf(token, docRowIndex) {
   var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
