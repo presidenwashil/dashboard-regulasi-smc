@@ -25,23 +25,8 @@ function userOrganization_(row, sheet, masterBidang) {
   return userOrganizationByUnitId_(row[unitIdColumn - 1], masterBidang);
 }
 
-function requireCurrentAdmin_(token) {
-  var auth = requireAccess_(token);
-  if (auth.error) return auth;
 
-  var nrp = (auth.session.nrp || '').toString().trim();
-  var rows = getUsersSheet_().getDataRange().getValues();
-  for (var i = 1; i < rows.length; i++) {
-    if ((rows[i][5] || '').toString().trim() !== nrp) continue;
-    if (rows[i][8] !== 'Approved' || rows[i][9] !== 'Admin') {
-      return { error: { success: false, message: 'Akses ditolak.' } };
-    }
-    return auth;
-  }
-  return { error: { success: false, message: 'Akses ditolak.' } };
-}
-
-function getPendingUsers(token) {
+function getPendingUsers_(token) {
   var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
@@ -66,7 +51,7 @@ function getPendingUsers(token) {
   return { success: true, data: pending };
 }
 
-function setUserStatus(token, rowIndex, newStatus, approvedUnitId) {
+function setUserStatus_(token, rowIndex, newStatus, approvedUnitId) {
   var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
@@ -93,7 +78,7 @@ function setUserStatus(token, rowIndex, newStatus, approvedUnitId) {
   }
 }
 
-function updateUserUnit(token, nrp, unitId) {
+function updateUserUnit_(token, nrp, unitId) {
   var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
@@ -116,7 +101,7 @@ function updateUserUnit(token, nrp, unitId) {
   }
 }
 
-function getAllUsers(token) {
+function getAllUsers_(token) {
   var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
@@ -143,7 +128,7 @@ function getAllUsers(token) {
   }
 }
 
-function resetUserPassword(token, rowIndex, newPassword) {
+function resetUserPassword_(token, rowIndex, newPassword) {
   var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
@@ -159,7 +144,7 @@ function resetUserPassword(token, rowIndex, newPassword) {
   }
 }
 
-function updateMyProfile(token, profile) {
+function updateMyProfile_(token, profile) {
   var auth = requireAccess_(token);
   if (auth.error) return auth.error;
 
@@ -198,7 +183,7 @@ function updateMyProfile(token, profile) {
   }
 }
 
-function changeMyPassword(token, newPassword) {
+function changeMyPassword_(token, newPassword) {
   var auth = requireAccess_(token);
   if (auth.error) return auth.error;
 
@@ -235,7 +220,7 @@ function changeMyPassword(token, newPassword) {
   }
 }
 
-function getUserStats(token) {
+function getUserStats_(token) {
   var auth = requireAccess_(token);
   if (auth.error) return auth.error;
 
@@ -260,7 +245,7 @@ function getUserStats(token) {
   }
 }
 
-function seedAdminAccount() {
+function seedAdminAccount_() {
   var nrpAdmin = 'admin01';
   var passwordAdmin = 'GANTI_PASSWORD_INI';
 
@@ -280,3 +265,15 @@ function seedAdminAccount() {
   ]);
   Logger.log('Akun admin berhasil dibuat. NRP: ' + nrpAdmin);
 }
+
+function getPendingUsers() { return getPendingUsers_.apply(this, arguments); }
+function setUserStatus() { return setUserStatus_.apply(this, arguments); }
+function updateUserUnit() { return updateUserUnit_.apply(this, arguments); }
+function getAllUsers() { return getAllUsers_.apply(this, arguments); }
+function resetUserPassword() { return resetUserPassword_.apply(this, arguments); }
+function updateMyProfile() { return updateMyProfile_.apply(this, arguments); }
+function changeMyPassword() { return changeMyPassword_.apply(this, arguments); }
+function getUserStats() { return getUserStats_.apply(this, arguments); }
+function seedAdminAccount() { return seedAdminAccount_.apply(this, arguments); }
+
+

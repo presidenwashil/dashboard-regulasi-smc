@@ -8,7 +8,7 @@ function getSosialisasiSheet_() {
   return sheet;
 }
 
-function markDocumentRead(token, docRowIndex, judulDokumen) {
+function markDocumentRead_(token, docRowIndex, judulDokumen) {
   var auth = requireAccess_(token);
   if (auth.error) return auth.error;
   var actor = currentDocumentActor_(auth.session);
@@ -42,7 +42,7 @@ function markDocumentRead(token, docRowIndex, judulDokumen) {
   }
 }
 
-function getMyReadDocs(token) {
+function getMyReadDocs_(token) {
   var auth = requireAccess_(token);
   if (auth.error) return auth.error;
   var actor = currentDocumentActor_(auth.session);
@@ -68,7 +68,7 @@ function getMyReadDocs(token) {
   }
 }
 
-function getSosialisasiSummary(token) {
+function getSosialisasiSummary_(token) {
   var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
@@ -165,7 +165,7 @@ function buildSosialisasiDetail_(docRowIndex) {
   return { judul: docRow[1], nomor: docRow[2], totalUser: approvedUsers.length, sudah: sudah, belum: belum };
 }
 
-function getSosialisasiDetail(token, docRowIndex) {
+function getSosialisasiDetail_(token, docRowIndex) {
   var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
@@ -179,7 +179,7 @@ function getSosialisasiDetail(token, docRowIndex) {
 // Diagnostik baca-saja untuk pemilik sheet: tidak pernah menulis, menambah,
 // atau menghapus baris. Duplikat = NRP kanonik yang sama pada Dokumen yang sama;
 // pembaca yang sah membaca beberapa Dokumen berbeda bukan duplikat.
-function listSosialisasiDuplicates() {
+function listSosialisasiDuplicates_() {
   var result = [];
 
   try {
@@ -215,7 +215,7 @@ function listSosialisasiDuplicates() {
   Logger.log(JSON.stringify(result));
   return result;
 }
-function generateSosialisasiPdf(token, docRowIndex) {
+function generateSosialisasiPdf_(token, docRowIndex) {
   var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
 
@@ -266,3 +266,11 @@ function generateSosialisasiPdf(token, docRowIndex) {
     return { success: false, message: 'Gagal membuat PDF: ' + err.toString() };
   }
 }
+
+function markDocumentRead() { return markDocumentRead_.apply(this, arguments); }
+function getMyReadDocs() { return getMyReadDocs_.apply(this, arguments); }
+function getSosialisasiSummary() { return getSosialisasiSummary_.apply(this, arguments); }
+function getSosialisasiDetail() { return getSosialisasiDetail_.apply(this, arguments); }
+function generateSosialisasiPdf() { return generateSosialisasiPdf_.apply(this, arguments); }
+function listSosialisasiDuplicates() { return listSosialisasiDuplicates_.apply(this, arguments); }
+

@@ -27,3 +27,4 @@ describe('escapeHtml_', () => {
     expect(ctx.escapeHtml_('<b>"A" & \'B\'</b>')).toBe('&lt;b&gt;&quot;A&quot; &amp; &#39;B&#39;&lt;/b&gt;');
   });
 });
+
