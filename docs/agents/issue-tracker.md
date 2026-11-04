@@ -36,6 +36,18 @@ ticket linkage.
 
 Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
 
+## Spec integration branches
+
+A large spec (an umbrella issue with many child tickets) can land through a
+long-lived integration branch instead of straight to `main`:
+
+- Create `integration/issue-<spec>` off `main`.
+- Every child-ticket PR targets that branch — never `main` — and keeps
+  `> Resolves #<ticket> · Part of #<spec>`.
+- When every child ticket is closed, open one PR from the integration branch
+  to `main` (`> Closes #<spec>`).
+- The agent still does not merge or push PRs without owner approval.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
