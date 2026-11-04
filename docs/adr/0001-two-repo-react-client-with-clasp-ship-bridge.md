@@ -31,7 +31,12 @@ does not move a production deployment (ADR-0003).
 
 - `gas/Index.html` is generated output (gitignored) — hand edits will be
   overwritten by the next ship; backend logic is edited and committed in the
-  `gas/*.gs` sources.
+  `gas/` sources.
+- `gas/` is no longer a flat set of verbatim files: it is now organised into
+  the layered layout recorded in ADR-0005 (`api/`, `service/`, `repository/`,
+  `config/`, plus leaf `lib/`), with `appsscript.json` and `Index.html` still
+  at the `gas/` root. clasp pushes nested folders verbatim
+  (`skipSubdirectories: false`).
 - Canonical domain docs (GLOSSARY.md, docs/adr/) and the backend live in the
   same repo.
 - Every feature must be verified against the real Apps Script environment
