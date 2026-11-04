@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { loadGas } from './loadGas';
 
-const ctx = loadGas(['config/Config.gs', 'config/Schema.gs', 'lib/Password.gs', 'lib/Nrp.gs', 'lib/Timestamp.gs', 'lib/Html.gs', 'lib/Bidang.gs', 'repository/SheetRepo.gs', 'Auth.gs', 'Users.gs', 'Pdf.gs']) as any;
+const ctx = loadGas(['config/Config.gs', 'config/Schema.gs', 'lib/Password.gs', 'lib/Nrp.gs', 'lib/Timestamp.gs', 'lib/Html.gs', 'lib/Bidang.gs', 'repository/SheetRepo.gs', 'service/AuthService.gs', 'service/UsersService.gs', 'service/SosialisasiService.gs']) as any;
 
 describe('requireAccess_', () => {
   it('menolak token kosong', () => {

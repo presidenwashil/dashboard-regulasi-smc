@@ -24,6 +24,20 @@ leaves the machine-readable report at `./.vitest/json/output.json`
 - Long commands: set an explicit `timeout`; networkish commands (`clasp
   versions`) can hang past the default.
 
+## Agent tool shells: `shell_command` is `cmd.exe`, not pwsh
+
+The agent's `shell_command` tool runs **cmd.exe**; the `powershell` tool runs
+Windows PowerShell 5.1. cmd.exe has no `tail`/`head`/`grep`/`Select-Object`
+and no `&&`/`||`. For pipelines, windowing, or `Select-Object`, use the
+`powershell` tool (with `;`, since 5.1 has no `&&`/`||`).
+
+- **Commit messages**: the bash heredoc `git commit -F - <<'EOF'` fails with a
+  `ParserError` under pwsh. Write the message to a file and run
+  `git commit -F <file>`, or use `git commit -m`.
+- **`gh issue view <n> --comments`** comes back empty through
+  `shell_command`. Read it in the `powershell` tool, or request
+  `--json …,comments --jq` instead.
+
 ## `bash` on PATH is WSL
 
 - It takes **unix paths only** (`/mnt/c/Users/...`), never `C:\...`.

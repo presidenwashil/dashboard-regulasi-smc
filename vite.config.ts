@@ -24,5 +24,9 @@ export default defineConfig({
     ],
     setupFiles: ['tests/react/setup.ts'],
     environment: 'jsdom',
+    // Ambient-proof: this machine exports NODE_ENV=production, which makes
+    // React resolve to its production build (React.act undefined) and fails
+    // every React test. Pin test env regardless of the shell.
+    env: { NODE_ENV: 'test' },
   },
 })
