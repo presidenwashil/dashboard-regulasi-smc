@@ -80,3 +80,11 @@ function canEditDocument_(row, actor, master) {
   return (row[15] || '').toString().trim() === actor.nrp &&
     canReadDocument_(row, actor, master);
 }
+
+function masterIdList_(value) {
+  var text = value === null || value === undefined ? '' : String(value).trim();
+  if (!text || text === '-') return [];
+  return text.split(',').map(function (entry) {
+    return entry.trim();
+  }).filter(Boolean);
+}

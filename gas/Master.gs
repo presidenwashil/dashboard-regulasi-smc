@@ -156,14 +156,6 @@ function userOrganizationByUnitId_(unitId, masterBidang) {
 
 /* ==================== MASTER WRITES (Admin) ==================== */
 
-function masterIdList_(value) {
-  var text = value === null || value === undefined ? '' : String(value).trim();
-  if (!text || text === '-') return [];
-  return text.split(',').map(function (entry) {
-    return entry.trim();
-  }).filter(Boolean);
-}
-
 function documentBidangReferences_(bidangId) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_DOCS);
   if (!sheet) return { target: false, uploader: false };
