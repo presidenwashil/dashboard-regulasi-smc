@@ -50,21 +50,30 @@ function canReadDocument_(row, actor, master) {
 
   var rawTargetIds = row[17] === null || row[17] === undefined ? '' : String(row[17]).trim();
   var rawLegacyTargets = row[6] === null || row[6] === undefined ? '' : String(row[6]).trim();
-  var hasTargets = (rawTargetIds && rawTargetIds !== '-') ||
-    (rawLegacyTargets && rawLegacyTargets !== '-');
+  var idTargets = documentBidangList_(rawTargetIds);
+  var validIdTargets = idTargets.map(function (target) { return masterBidangById_(target, master); }).filter(Boolean);
+  var legacyNames = documentBidangList_(rawLegacyTargets);
+  var validLegacyTargets = legacyNames.filter(function (name) {
+    return master.some(function (bidang) { return normalizeBidangKey_(bidang.name) === normalizeBidangKey_(name); });
+  });
+  var hasTargets = (validIdTargets.length > 0) || (validLegacyTargets.length > 0) ||
+    (rawLegacyTargets && rawLegacyTargets !== '-' && rawLegacyTargets !== '');
   if (!hasTargets) return true;
 
-  var targets = documentBidangList_(rawTargetIds);
-  var hasGeneralTarget = targets.some(function (target) {
-    var bidang = masterBidangById_(target, master);
-    return Boolean(bidang) && normalizeBidangKey_(bidang.name) === 'umum';
+  var targets = validIdTargets.length > 0 ? validIdTargets : legacyNames.map(function (name) {
+    for (var i = 0; i < master.length; i++) {
+      if (normalizeBidangKey_(master[i].name) === normalizeBidangKey_(name)) return master[i];
+    }
+    return null;
+  }).filter(Boolean);
+  var hasGeneralTarget = targets.some(function (bidang) {
+    return normalizeBidangKey_(bidang.name) === 'umum';
   });
   if (hasGeneralTarget) return true;
   if (!isValidCurrentBidang_(actor, master)) return false;
 
-  var matchesTarget = targets.some(function (target) {
-    var bidang = masterBidangById_(target, master);
-    return Boolean(bidang) && bidang.id === Number(actor.bidangId);
+  var matchesTarget = targets.some(function (bidang) {
+    return bidang.id === Number(actor.bidangId);
   });
   var uploaderBidangId = Number(row[18]);
   return matchesTarget || (

@@ -147,11 +147,17 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     if (actor.role === "Admin") return true;
     const rawTarget = String(row[6] ?? "").trim();
     const rawTargetIds = String(row[17] ?? "").trim();
-    const hasTargets = (rawTarget && rawTarget !== "-") || (rawTargetIds && rawTargetIds !== "-");
+    const idTargets = documentTargets(rawTargetIds);
+    const validIdTargets = idTargets.map(masterBidangById).filter((bidang): bidang is NonNullable<typeof bidang> => Boolean(bidang));
+    const hasLegacyTargets = Boolean(rawTarget && rawTarget !== "-");
+    const hasTargets = validIdTargets.length > 0 || hasLegacyTargets;
     if (!hasTargets) return true;
-    const targets = documentTargets(rawTargetIds)
-      .map(masterBidangById)
-      .filter((bidang): bidang is NonNullable<typeof bidang> => Boolean(bidang));
+    const legacyTargets = hasLegacyTargets
+      ? documentTargets(rawTarget)
+          .map((name) => seed.masterBidang.find((bidang) => bidang.name.trim().toLowerCase() === name.trim().toLowerCase()) ?? null)
+          .filter((bidang): bidang is NonNullable<typeof bidang> => Boolean(bidang))
+      : [];
+    const targets = validIdTargets.length > 0 ? validIdTargets : legacyTargets;
     if (targets.some((target) => target.name.trim().toLowerCase() === "umum")) return true;
     if (actor.bidangId === null) return false;
     return targets.some((target) => target.id === actor.bidangId) ||
