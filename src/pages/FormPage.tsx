@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { useAdapter } from '../adapter/context';
-import type { Dokumen, DokumenInput, FilePayload, MasterBidang, Sesi, StatusBerlaku } from '../adapter/types';
+import type { Dokumen, DokumenInput, FilePayload, MasterBidang, MasterUnit, Sesi, StatusBerlaku } from '../adapter/types';
 import { AKREDITASI_OPTIONS, DATA_UNIT, JENIS_OPTIONS, PEMILIK_OPTIONS, fmtTanggalInput, requireDocId } from '../utils';
 import type { Notify } from '../components/Shared';
 
@@ -39,15 +39,19 @@ export default function FormPage(props: FormProps) {
   const api = useAdapter();
   const { notify } = props;
   const [master, setMaster] = useState<MasterBidang[] | null>(null);
+  const [masterUnit, setMasterUnit] = useState<MasterUnit[] | null>(null);
 
   useEffect(() => {
     api.getMasterBidang()
       .then(setMaster)
       .catch((e: Error) => notify(e.message, true));
+    api.getMasterUnit()
+      .then(setMasterUnit)
+      .catch((e: Error) => notify(e.message, true));
   }, [api, notify]);
 
-  if (!master) return <div className="p-8 text-center text-cyan-400">Memuat master bidang...</div>;
-  return <FormInner master={master} {...props} />;
+  if (!master || !masterUnit) return <div className="p-8 text-center text-cyan-400">Memuat master bidang...</div>;
+  return <FormInner master={master} masterUnit={masterUnit} {...props} />;
 }
 
 interface FormState {
@@ -58,6 +62,7 @@ interface FormState {
   pemilik: string;
   unit: string;
   bidangIds: number[];
+  unitIds: number[];
   invalidBidang: string[];
   confirmInvalidBidang: boolean;
   status: string;
@@ -71,7 +76,7 @@ interface FormState {
 function initialState(d: Dokumen | null, master: MasterBidang[]): FormState {
   const blank: FormState = {
     judul: '', nomor: '', jenis: '', jenisLainnya: '', pemilik: '', unit: '',
-    bidangIds: [], invalidBidang: [], confirmInvalidBidang: false, status: '', revisi: '', tanggal: '',
+    bidangIds: [], unitIds: [], invalidBidang: [], confirmInvalidBidang: false, status: '', revisi: '', tanggal: '',
     statusBerlaku: 'Aktif', akreditasi: [], keterangan: '',
   };
   if (!d) return blank;
@@ -90,6 +95,7 @@ function initialState(d: Dokumen | null, master: MasterBidang[]): FormState {
     pemilik: d.pemilik,
     unit: d.unit && d.unit !== '-' ? d.unit : '',
     bidangIds: [...new Set(validIds)],
+    unitIds: [...new Set(d.unitIds ?? [])],
     invalidBidang: invalid,
     confirmInvalidBidang: false,
     status: d.statusDokumen ?? '',
@@ -108,9 +114,10 @@ function toStatusBerlaku(value: string): StatusBerlaku {
 
 interface FormInnerProps extends FormProps {
   master: MasterBidang[];
+  masterUnit: MasterUnit[];
 }
 
-function FormInner({ master, editing, sesi, notify, onSaved }: FormInnerProps) {
+function FormInner({ master, masterUnit, editing, sesi, notify, onSaved }: FormInnerProps) {
   const api = useAdapter();
   const [f, setF] = useState<FormState>(() => initialState(editing, master));
   const [pdf, setPdf] = useState<File | null>(null);
@@ -126,6 +133,13 @@ function FormInner({ master, editing, sesi, notify, onSaved }: FormInnerProps) {
       bidangIds: s.bidangIds.includes(id)
         ? s.bidangIds.filter((current) => current !== id)
         : [...s.bidangIds, id],
+    }));
+  const toggleUnit = (id: number) =>
+    setF((s) => ({
+      ...s,
+      unitIds: s.unitIds.includes(id)
+        ? s.unitIds.filter((current) => current !== id)
+        : [...s.unitIds, id],
     }));
   const toggleAkreditasi = (value: string) =>
     setF((s) => ({
@@ -150,6 +164,7 @@ function FormInner({ master, editing, sesi, notify, onSaved }: FormInnerProps) {
         pemilik: f.pemilik,
         unit: f.unit,
         bidangIds: f.bidangIds,
+        unitIds: f.unitIds,
         statusDokumen: f.status === 'Revisi' ? 'Revisi' : 'Baru',
         revisi: f.status === 'Revisi' ? f.revisi : null,
         tanggal: f.tanggal || null,
@@ -310,6 +325,39 @@ function FormInner({ master, editing, sesi, notify, onSaved }: FormInnerProps) {
                   {sesi.user.role !== 'Admin' && <p className="mt-2">Hubungi Admin untuk memperbaikinya.</p>}
                 </div>
               )}
+              <div className="mt-4">
+                <label className={`${lbl} mb-2`}>Unit Organisasi Terkait <span className="text-xs font-normal text-gray-500">(Opsional)</span></label>
+                <p className="text-xs text-gray-400 mb-3">
+                  Pilih Unit Organisasi yang dapat membaca dokumen. Jika dikosongkan, akses mengikuti aturan umum.
+                </p>
+                <fieldset
+                  disabled={Boolean(editing && sesi.user.role !== 'Admin')}
+                  className="border border-gray-700 rounded-xl p-3 max-h-64 overflow-y-auto bg-gray-900/40 space-y-2 disabled:opacity-70"
+                >
+                  {master.map((bidang) => {
+                    const units = masterUnit.filter((unit) => unit.bidangId === bidang.id);
+                    if (units.length === 0) return null;
+                    return (
+                      <details key={bidang.id} open className="rounded-lg border border-gray-800 bg-gray-900/30">
+                        <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-gray-300 hover:text-cyan-400">
+                          {bidang.name}
+                        </summary>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 px-3 pb-3">
+                          {units.map((unit) => (
+                            <label key={unit.id} className="flex items-center gap-2 text-sm text-gray-300 hover:text-cyan-400 transition-colors">
+                              <input type="checkbox" className="checkbox-custom" checked={f.unitIds.includes(unit.id)} onChange={() => toggleUnit(unit.id)} />
+                              <span>{unit.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </details>
+                    );
+                  })}
+                </fieldset>
+                {f.bidangIds.length === 0 && f.unitIds.length === 0 && (
+                  <p className="text-xs text-amber-300 mt-2">Dokumen tanpa target akan dapat dibaca semua user Approved.</p>
+                )}
+              </div>
             </div>
           </>)}
 

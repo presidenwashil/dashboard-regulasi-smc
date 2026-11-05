@@ -89,7 +89,7 @@ function setup(documents: Row[] = [DOC_HEADER]) {
     MasterUnit: units.sheet,
   };
   const ctx = loadGas(
-    ['config/Config.gs', 'config/Schema.gs', 'lib/Password.gs', 'lib/Nrp.gs', 'lib/Timestamp.gs', 'lib/Html.gs', 'lib/Bidang.gs', 'repository/SheetRepo.gs', 'repository/DocBidangRepo.gs', 'service/AuthService.gs', 'service/UsersService.gs', 'service/OrganizationService.gs', 'service/DocumentsService.gs'],
+    ['config/Config.gs', 'config/Schema.gs', 'lib/Password.gs', 'lib/Nrp.gs', 'lib/Timestamp.gs', 'lib/Html.gs', 'lib/Bidang.gs', 'repository/SheetRepo.gs', 'repository/DocBidangRepo.gs', 'repository/DocUnitRepo.gs', 'service/AuthService.gs', 'service/UsersService.gs', 'service/OrganizationService.gs', 'service/DocumentsService.gs'],
     {
       SpreadsheetApp: {
         getActiveSpreadsheet: () => ({
@@ -131,14 +131,14 @@ describe('getAllData (server-enforced document audience)', () => {
       DOC_HEADER,
       docRow('IT target', 'IT'),
       docRow('No target', '-'),
-      docRow('General target', 'Umum, IT'),
+      docRow('General target', 'IT'),
       docRow('Legacy invalid target', 'Lainnya', 'uploader', 'SDM'),
     ]);
 
     const rowIds = (token: string) => ctx.getAllData(token).map((row: unknown[]) => row[1]);
     expect(rowIds('token-it-user')).toEqual(['General target', 'No target', 'IT target']);
-    expect(rowIds('token-sdm-user')).toEqual(['Legacy invalid target', 'General target', 'No target']);
-    expect(rowIds('token-other-user')).toEqual(['General target', 'No target']);
+    expect(rowIds('token-sdm-user')).toEqual(['Legacy invalid target', 'No target']);
+    expect(rowIds('token-other-user')).toEqual(['No target']);
     expect(rowIds('token-admin01')).toHaveLength(4);
     expect(ctx.getAllData('token-it-user').find((row: unknown[]) => row[1] === 'IT target')?.[16]).toBe(false);
     expect(ctx.getAllData('token-uploader').find((row: unknown[]) => row[1] === 'Legacy invalid target')?.[16]).toBe(true);

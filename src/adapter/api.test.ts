@@ -257,7 +257,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     const api = createApi(backend);
     await api.saveDataWithFiles(testSesi("tok"), {
       judul: "SPO Ujian", nomor: "SPO/RM/003", jenis: "SPO", pemilik: "Casemix", unit: "Data Entry",
-      bidangIds: [1, 2], statusDokumen: "Revisi", revisi: "2", tanggal: "2026-05-01",
+      bidangIds: [1, 2], unitIds: [], statusDokumen: "Revisi", revisi: "2", tanggal: "2026-05-01",
       akreditasi: ["TKRS"], keterangan: "-", statusBerlaku: "Aktif",
       pdfFile: null, wordFile: null,
     });
@@ -266,7 +266,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
       "tok",
       {
         judul: "SPO Ujian", nomor: "SPO/RM/003", jenis: "SPO", pemilik: "Casemix", unit: "Data Entry",
-        bidangIds: "1,2", status: "Revisi", revisi: "2", tanggal: "2026-05-01",
+        bidangIds: "1,2", unitIds: "-", status: "Revisi", revisi: "2", tanggal: "2026-05-01",
         akreditasi: "TKRS", keterangan: "-", statusBerlaku: "Aktif",
         pdfFile: null, wordFile: null,
       },
@@ -286,7 +286,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
     const api = createApi(backend);
     await api.updateDataWithFiles(testSesi("tok"), {
       judul: "SPO Ujian", nomor: "SPO/RM/003", jenis: "SPO", pemilik: "Casemix", unit: "Data Entry",
-      bidangIds: [], statusDokumen: "Baru", revisi: null, tanggal: "2026-05-01",
+      bidangIds: [], unitIds: [], statusDokumen: "Baru", revisi: null, tanggal: "2026-05-01",
       akreditasi: [], keterangan: "", statusBerlaku: "Aktif",
       pdfFile: null, wordFile: null,
     }, 7,
@@ -296,7 +296,7 @@ describe("adapter envelope contract (createApi over a Backend)", () => {
       "tok",
       {
         judul: "SPO Ujian", nomor: "SPO/RM/003", jenis: "SPO", pemilik: "Casemix", unit: "Data Entry",
-        bidangIds: "-", status: "Baru", revisi: "-", tanggal: "2026-05-01",
+        bidangIds: "-", unitIds: "-", status: "Baru", revisi: "-", tanggal: "2026-05-01",
         akreditasi: "-", keterangan: "-", statusBerlaku: "Aktif",
         existingPdfUrl: "https://docs.google.com/document/d/keep/view",
         existingWordUrl: "",

@@ -35,6 +35,10 @@ export type Dokumen = {
   bidang: string[];
   /** Stable MasterBidang IDs used for access decisions. */
   bidangIds: number[];
+  /** Stable MasterUnit IDs used for access decisions. */
+  unitIds: number[];
+  /** Resolved Unit Organisasi names for the document's Unit targets. */
+  unitTargets: string[];
   /** Whether the current User may edit this document, as decided by the server. */
   canEdit?: boolean;
   statusDokumen: StatusDokumen;
@@ -155,6 +159,7 @@ export type DokumenInput = {
   pemilik: string;
   unit: string;
   bidangIds: number[];
+  unitIds: number[];
   statusDokumen: "Baru" | "Revisi";
   revisi: string | null;
   tanggal: string | null;

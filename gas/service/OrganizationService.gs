@@ -194,6 +194,35 @@ function unitHasUserReference_(unitId) {
   return false;
 }
 
+function documentUnitReferences_(unitId) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_DOCS);
+  var target = false;
+  var uploader = false;
+  if (sheet) {
+    var rows = sheet.getDataRange().getValues();
+    if (rows.length >= 2) {
+      var header = rows[0] || [];
+      var targetColumn = -1;
+      // DocUnit junction is the source of truth for unit targets.
+      var junctionSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_DOC_UNIT);
+      if (junctionSheet) {
+        var jRows = junctionSheet.getDataRange().getValues();
+        for (var j = 1; j < jRows.length; j++) {
+          if (Number(jRows[j][2]) === unitId) { target = true; break; }
+        }
+      }
+      // UploaderUnitID snapshot column (index 19).
+      var uploaderColumn = 19;
+      for (var i = 1; i < rows.length; i++) {
+        var row = rows[i];
+        while (row.length <= uploaderColumn) row.push('');
+        if (Number(row[uploaderColumn]) === unitId) { uploader = true; break; }
+      }
+    }
+  }
+  return { target: target, uploader: uploader };
+}
+
 function createMasterBidang_(token, name) {
   var auth = requireCurrentAdmin_(token);
   if (auth.error) return auth.error;
@@ -442,6 +471,20 @@ function deleteMasterUnit_(token, id) {
         };
       }
 
+      var references = documentUnitReferences_(unitId);
+      if (references.target) {
+        return {
+          success: false,
+          message: 'Unit tidak dapat dihapus karena masih menjadi target Dokumen.',
+        };
+      }
+      if (references.uploader) {
+        return {
+          success: false,
+          message: 'Unit tidak dapat dihapus karena masih menjadi snapshot Unit pengunggah Dokumen.',
+        };
+      }
+
       var sheet = getMasterUnitSheet_();
       var header = sheet.getDataRange().getValues()[0] || [];
       var found = findMasterRow_(sheet, masterColumn_(header, 'UnitID'), unitId);
@@ -462,5 +505,60 @@ function deleteMasterBidang() { return deleteMasterBidang_.apply(this, arguments
 function createMasterUnit() { return createMasterUnit_.apply(this, arguments); }
 function renameMasterUnit() { return renameMasterUnit_.apply(this, arguments); }
 function reparentMasterUnit() { return reparentMasterUnit_.apply(this, arguments); }
+function migrateUploaderUnitIds_(token) {
+  var auth = requireCurrentAdmin_(token);
+  if (auth.error) return auth.error;
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    return { success: false, message: 'Sistem sedang sibuk, coba lagi.' };
+  }
+  try {
+    var docsSheet = getDocsSheet_();
+    ensureDocMetadataHeaders_(docsSheet);
+    var rows = docsSheet.getDataRange().getValues();
+    if (rows.length <= 1) return { success: true, updated: 0, skipped: 0 };
+
+    var usersSheet = getUsersSheet_();
+    var userRows = usersSheet.getDataRange().getValues();
+    var unitIdColumn = ensureUsersUnitIdColumn_(usersSheet);
+
+    var userUnitById = {};
+    for (var u = 1; u < userRows.length; u++) {
+      var nrp = (userRows[u][5] || '').toString().trim();
+      if (!nrp) continue;
+      var uid = userRows[u][unitIdColumn - 1];
+      if (uid === '' || uid === null || uid === undefined) continue;
+      var num = Number(uid);
+      if (!Number.isInteger(num) || num <= 0) continue;
+      userUnitById[nrp] = num;
+    }
+
+    var updated = 0;
+    var skipped = 0;
+    for (var r = 1; r < rows.length; r++) {
+      var row = rows[r];
+      while (row.length < 20) row.push('');
+      var current = (row[19] === null || row[19] === undefined) ? '' : String(row[19]).trim();
+      if (current !== '') { skipped++; continue; }
+      var uploaderNrp = (row[15] === null || row[15] === undefined) ? '' : String(row[15]).trim();
+      if (!uploaderNrp || !Object.prototype.hasOwnProperty.call(userUnitById, uploaderNrp)) {
+        Logger.log('migrateUploaderUnitIds_: no Unit for uploader ' + uploaderNrp + ' at row ' + (r + 1));
+        skipped++;
+        continue;
+      }
+      docsSheet.getRange(r + 1, 20).setValue(userUnitById[uploaderNrp]);
+      updated++;
+    }
+    return { success: true, message: 'Migrasi selesai.', updated: updated, skipped: skipped };
+  } catch (err) {
+    return { success: false, message: 'Gagal migrasi: ' + err.toString() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function migrateUploaderUnitIds() { return migrateUploaderUnitIds_.apply(this, arguments); }
+
 function deleteMasterUnit() { return deleteMasterUnit_.apply(this, arguments); }
 

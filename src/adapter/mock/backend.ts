@@ -94,6 +94,19 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     }
   });
 
+  // Junction store mirroring the DocUnit sheet.
+  const docUnitRows: Array<[number, number, number]> = [];
+  seed.documents.forEach((row, index) => {
+    const docRowIndex = index + 2;
+    const ids = String((row as Array<unknown>)[19] ?? "").trim();
+    if (ids && ids !== "-") {
+      for (const part of ids.split(",")) {
+        const id = Number(part.trim());
+        if (Number.isInteger(id) && id > 0) docUnitRows.push([Date.now(), docRowIndex, id]);
+      }
+    }
+  });
+
   function documentBidangReferences(bidangId: number) {
     let target = docBidangRows.some((entry) => entry[2] === bidangId);
     let uploader = false;
@@ -112,6 +125,30 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
       if (!map[docIndex].includes(id)) map[docIndex].push(id);
     }
     return map;
+  }
+
+  function groupDocUnitByDoc(): Record<number, number[]> {
+    const map: Record<number, number[]> = {};
+    for (const entry of docUnitRows) {
+      const docIndex = entry[1];
+      const id = entry[2];
+      if (!map[docIndex]) map[docIndex] = [];
+      if (!map[docIndex].includes(id)) map[docIndex].push(id);
+    }
+    return map;
+  }
+
+  function replaceDocUnitTargets(docRowIndex: number, unitIds: number[]) {
+    for (let i = docUnitRows.length - 1; i >= 0; i--) {
+      if (docUnitRows[i][1] === docRowIndex) docUnitRows.splice(i, 1);
+    }
+    const ids: number[] = [];
+    for (const raw of unitIds) {
+      const id = Number(raw);
+      if (Number.isInteger(id) && id > 0 && !ids.includes(id)) ids.push(id);
+    }
+    for (const id of ids) docUnitRows.push([Date.now(), docRowIndex, id]);
+    return ids;
   }
 
   function replaceDocBidangTargets(docRowIndex: number, bidangIds: number[]) {
@@ -178,23 +215,53 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
 
   function canReadDocument(row: Array<unknown>, actor: User): boolean {
     if (actor.role === "Admin") return true;
-    const rawTarget = String(row[6] ?? "").trim();
-    const rawTargetIds = String(row[17] ?? "").trim();
-    const idTargets = documentTargets(rawTargetIds);
-    const validIdTargets = idTargets.map(masterBidangById).filter((bidang): bidang is NonNullable<typeof bidang> => Boolean(bidang));
-    const hasLegacyTargets = Boolean(rawTarget && rawTarget !== "-");
-    const hasTargets = validIdTargets.length > 0 || hasLegacyTargets;
-    if (!hasTargets) return true;
-    const legacyTargets = hasLegacyTargets
-      ? documentTargets(rawTarget)
+
+    const rawBidangTarget = String(row[6] ?? "").trim();
+    const rawBidangTargetIds = String(row[17] ?? "").trim();
+    const bidangIdTargets = documentTargets(rawBidangTargetIds);
+    const validBidangIdTargets = bidangIdTargets.map(masterBidangById).filter((bidang): bidang is NonNullable<typeof bidang> => Boolean(bidang));
+    const hasLegacyBidangTargets = Boolean(rawBidangTarget && rawBidangTarget !== "-");
+    const hasBidangTargets = validBidangIdTargets.length > 0 || hasLegacyBidangTargets ||
+      (rawBidangTargetIds !== "" && rawBidangTargetIds !== "-");
+
+    const legacyBidangTargets = hasLegacyBidangTargets
+      ? documentTargets(rawBidangTarget)
           .map((name) => seed.masterBidang.find((bidang) => bidang.name.trim().toLowerCase() === name.trim().toLowerCase()) ?? null)
           .filter((bidang): bidang is NonNullable<typeof bidang> => Boolean(bidang))
       : [];
-    const targets = validIdTargets.length > 0 ? validIdTargets : legacyTargets;
-    if (targets.some((target) => target.name.trim().toLowerCase() === "umum")) return true;
-    if (actor.bidangId === null) return false;
-    return targets.some((target) => target.id === actor.bidangId) ||
-      Number(row[18]) === actor.bidangId;
+    const bidangTargets = validBidangIdTargets.length > 0 ? validBidangIdTargets : legacyBidangTargets;
+
+    const rawUnitTargetIds = String(row[19] ?? "").trim();
+    const unitIdTargets = documentTargets(rawUnitTargetIds);
+    const validUnitIdTargets = unitIdTargets.map(masterUnitById).filter((unit): unit is NonNullable<typeof unit> => Boolean(unit));
+    const hasUnitTargets = validUnitIdTargets.length > 0 || (rawUnitTargetIds !== "" && rawUnitTargetIds !== "-");
+
+    const hasTargets = hasBidangTargets || hasUnitTargets;
+    if (!hasTargets) return true;
+
+    let bidangMatch = false;
+    if (hasBidangTargets && actor.bidangId !== null) {
+      bidangMatch = bidangTargets.some((target) => target.id === actor.bidangId);
+    }
+    let unitMatch = false;
+    if (hasUnitTargets && actor.unitId !== null) {
+      unitMatch = validUnitIdTargets.some((target) => target.id === actor.unitId);
+    }
+    if (bidangMatch || unitMatch) return true;
+
+    const uploaderBidangId = Number(row[18]);
+    if (Number.isInteger(uploaderBidangId) && uploaderBidangId > 0 && uploaderBidangId === actor.bidangId) return true;
+
+    const uploaderUnitId = String(row[21] ?? "").trim();
+    if (uploaderUnitId !== "" && uploaderUnitId !== "-") {
+      const uploaderUnitNum = Number(uploaderUnitId);
+      if (Number.isInteger(uploaderUnitNum) && uploaderUnitNum > 0 && actor.unitId !== null && uploaderUnitNum === actor.unitId) return true;
+    }
+
+    const uploaderNrp = String(row[15] ?? "").trim();
+    if (uploaderNrp !== "" && uploaderNrp === String(actor.nrp).trim()) return true;
+
+    return false;
   }
 
   function canEditDocument(row: Array<unknown>, actor: User): boolean {
@@ -208,17 +275,24 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
     // Mirror Code.js getAllData: pad, default Aktif, append the sheet row
     // index and edit permission, reverse (newest first). Seed timestamps are already ms numbers.
     const junctionMap = groupDocBidangByDoc();
+    const unitJunctionMap = groupDocUnitByDoc();
+    const unitNameById = new Map(seed.masterUnit.map((u) => [u.id, u.name]));
     const rows = seed.documents.map((row, index) => {
       const padded = [...row];
       while (padded.length < 15) padded.push("");
       if (!padded[14] && padded[1]) padded[14] = "Aktif";
-      while (padded.length < 19) padded.push("");
+      while (padded.length < 20) padded.push("");
       const rowIndex = index + 2;
       // Hydrate deprecated column 17 from the junction store.
       padded[17] = (junctionMap[rowIndex] ?? []).join(",");
-      return { row: padded as Array<unknown>, rowIndex };
+      const unitIds = unitJunctionMap[rowIndex] ?? [];
+      const unitNames = unitIds.map((id) => unitNameById.get(id) ?? "").filter(Boolean);
+      return { row: padded as Array<unknown>, rowIndex, unitIds, unitNames };
     }).filter(({ row }) => !actor || canReadDocument(row, actor))
-      .map(({ row, rowIndex }) => [...row.slice(0, 15), rowIndex, actor ? canEditDocument(row, actor) : false, row[17]]);
+      .map(({ row, rowIndex, unitIds, unitNames }) => [
+        ...row.slice(0, 15), rowIndex, actor ? canEditDocument(row, actor) : false,
+        row[17], row[18], unitIds.join(","), unitNames.join(", "), row[19],
+      ]);
     return rows.reverse();
   }
 
@@ -442,6 +516,18 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
         return {
           success: false,
           message: "Unit tidak dapat dihapus karena masih digunakan oleh User.",
+        };
+      }
+      if (docUnitRows.some((entry) => entry[2] === target.id)) {
+        return {
+          success: false,
+          message: "Unit tidak dapat dihapus karena masih menjadi target Dokumen.",
+        };
+      }
+      if (seed.documents.some((row) => Number((row as Array<unknown>)[19]) === target.id)) {
+        return {
+          success: false,
+          message: "Unit tidak dapat dihapus karena masih menjadi snapshot Unit pengunggah Dokumen.",
         };
       }
       seed.masterUnit.splice(seed.masterUnit.findIndex((unit) => unit.id === target.id), 1);
@@ -718,8 +804,14 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
       if (targets.some((target) => !target)) {
         return { success: false, message: "Tujuan Bidang/Komite harus menggunakan ID MasterBidang yang valid." };
       }
+      const requestedUnitTargets = documentTargets(data.unitIds);
+      const unitTargets = requestedUnitTargets.map(masterUnitById);
+      if (unitTargets.some((target) => !target)) {
+        return { success: false, message: "Tujuan Unit Organisasi harus menggunakan ID MasterUnit yang valid." };
+      }
       const targetBidangs = targets.filter((target) => target !== null);
       const uniqueTargetBidangs = [...new Map(targetBidangs.map((target) => [target.id, target])).values()];
+      const uniqueTargetUnits = [...new Map(unitTargets.filter((target) => target !== null).map((target) => [target.id, target])).values()];
       const docRowIndex = seed.documents.length + 2;
       seed.documents.push([
         Date.now(),
@@ -729,9 +821,10 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
         String(data.status ?? "Baru"), data.revisi ?? "", data.tanggal ?? "",
         "", "", String(data.akreditasi ?? "-"), String(data.keterangan ?? ""),
         String(data.statusBerlaku ?? "Aktif"), nrpDisplay(user.nrp), user.bidang,
-        "", user.bidangId,
+        "", user.bidangId, user.unitId ?? "",
       ]);
       replaceDocBidangTargets(docRowIndex, uniqueTargetBidangs.map((target) => target.id));
+      replaceDocUnitTargets(docRowIndex, uniqueTargetUnits.map((target) => target.id));
       return { success: true, message: "Data dan File berhasil disimpan!" };
     },
 
@@ -744,7 +837,7 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
       if (!existing) {
         return { success: false, message: "Error Update: baris tidak ditemukan." };
       }
-      while (existing.length < 19) existing.push("");
+      while (existing.length < 20) existing.push("");
       if (!canEditDocument(existing, user)) return ACCESS_DENIED;
       let targetValue = String(existing[6] ?? "-");
       if (user.role === "Admin") {
@@ -753,9 +846,16 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
         if (targets.some((target) => !target)) {
           return { success: false, message: "Tujuan Bidang/Komite harus menggunakan ID MasterBidang yang valid." };
         }
+        const requestedUnitTargets = documentTargets(data.unitIds);
+        const unitTargets = requestedUnitTargets.map(masterUnitById);
+        if (unitTargets.some((target) => !target)) {
+          return { success: false, message: "Tujuan Unit Organisasi harus menggunakan ID MasterUnit yang valid." };
+        }
         const uniqueTargets = [...new Map(targets.filter((target) => target !== null).map((target) => [target.id, target])).values()];
+        const uniqueUnitTargets = [...new Map(unitTargets.filter((target) => target !== null).map((target) => [target.id, target])).values()];
         targetValue = uniqueTargets.length ? uniqueTargets.map((target) => target.name).join(", ") : "-";
         replaceDocBidangTargets(Number(rowIndex), uniqueTargets.map((target) => target.id));
+        replaceDocUnitTargets(Number(rowIndex), uniqueUnitTargets.map((target) => target.id));
       }
       seed.documents[position] = [
         Date.now(),
@@ -766,7 +866,7 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
         data.wordFile ? "https://docs.google.com/document/d/mock-new-word" : existing[11] ?? "",
         String(data.akreditasi ?? existing[12]), String(data.keterangan ?? existing[13]),
         String(data.statusBerlaku ?? existing[14] ?? "Aktif"), existing[15], existing[16],
-        "", existing[18],
+        "", existing[18], existing[19],
       ];
       return { success: true, message: "Data berhasil diperbarui!" };
     },

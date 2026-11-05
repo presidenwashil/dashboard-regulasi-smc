@@ -432,6 +432,7 @@ function toLegacyDocPayload(input: DokumenInput) {
     pemilik: input.pemilik,
     unit: input.unit || "-",
     bidangIds: joinedIds(input.bidangIds),
+    unitIds: joinedIds(input.unitIds),
     status: input.statusDokumen,
     revisi: input.revisi ?? "-",
     tanggal: input.tanggal ?? "",

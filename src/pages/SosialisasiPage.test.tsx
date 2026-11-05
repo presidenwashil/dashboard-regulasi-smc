@@ -34,7 +34,7 @@ describe("SosialisasiPage with the mock Adapter", () => {
   it("renders normalized documents and confirms a read through the Adapter", async () => {
     const user = userEvent.setup();
     const api = createApi(createMockBackend());
-    const session = await api.loginUser("0042", "demo-farah");
+    const session = await api.loginUser("admin01", "demo-ganti-saya");
     const docs = await api.getAllData(session);
 
     render(
