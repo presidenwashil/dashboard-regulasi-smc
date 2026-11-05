@@ -91,7 +91,7 @@ function setup() {
     Database_Regulasi: makeSheet(documentRows),
   };
 
-  const ctx = loadGas(["config/Config.gs", "config/Schema.gs", "lib/Password.gs", "lib/Nrp.gs", "lib/Timestamp.gs", "lib/Html.gs", "lib/Bidang.gs", "repository/SheetRepo.gs", "service/AuthService.gs", "service/UsersService.gs", "service/OrganizationService.gs"], {
+  const ctx = loadGas(["config/Config.gs", "config/Schema.gs", "lib/Password.gs", "lib/Nrp.gs", "lib/Timestamp.gs", "lib/Html.gs", "lib/Bidang.gs", "repository/SheetRepo.gs", "repository/DocBidangRepo.gs", "service/AuthService.gs", "service/UsersService.gs", "service/OrganizationService.gs"], {
     SpreadsheetApp: {
       getActiveSpreadsheet: () => ({
         getSheetByName: (name: string) => sheets[name] ?? null,

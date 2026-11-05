@@ -46,6 +46,9 @@ function makeSheet(rows: Row[]) {
     appendRow(values: Row) {
       rows.push([...values]);
     },
+    getLastRow() {
+      return rows.length;
+    },
   };
   return { sheet, rows };
 }
@@ -86,7 +89,7 @@ function setup(documents: Row[] = [DOC_HEADER]) {
     MasterUnit: units.sheet,
   };
   const ctx = loadGas(
-    ['config/Config.gs', 'config/Schema.gs', 'lib/Password.gs', 'lib/Nrp.gs', 'lib/Timestamp.gs', 'lib/Html.gs', 'lib/Bidang.gs', 'repository/SheetRepo.gs', 'service/AuthService.gs', 'service/UsersService.gs', 'service/OrganizationService.gs', 'service/DocumentsService.gs'],
+    ['config/Config.gs', 'config/Schema.gs', 'lib/Password.gs', 'lib/Nrp.gs', 'lib/Timestamp.gs', 'lib/Html.gs', 'lib/Bidang.gs', 'repository/SheetRepo.gs', 'repository/DocBidangRepo.gs', 'service/AuthService.gs', 'service/UsersService.gs', 'service/OrganizationService.gs', 'service/DocumentsService.gs'],
     {
       SpreadsheetApp: {
         getActiveSpreadsheet: () => ({
@@ -166,7 +169,7 @@ describe('document create/update authorization', () => {
     });
 
     expect(result).toMatchObject({ success: true });
-    expect(docs.rows[1]).toMatchObject({ 6: 'SDM, IT', 15: 'uploader', 16: 'SDM', 17: '2,3', 18: 2 });
+    expect(docs.rows[1]).toMatchObject({ 6: 'SDM, IT', 15: 'uploader', 16: 'SDM', 17: '', 18: 2 });
   });
 
   it('rejects free-text targets and uploads from users with invalid membership', () => {
@@ -202,7 +205,7 @@ describe('document create/update authorization', () => {
       10: 'https://drive.test/original',
       15: 'uploader',
       16: 'SDM',
-      17: '3',
+      17: '',
       18: 2,
     });
     expect(ctx.updateDataWithFiles('token-other-user', data, 2)).toMatchObject({

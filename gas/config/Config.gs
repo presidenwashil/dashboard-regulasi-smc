@@ -4,5 +4,6 @@ var CONFIG = {
   SHEET_SOSIALISASI: 'Sosialisasi',
   SHEET_MASTER_BIDANG: 'MasterBidang',
   SHEET_MASTER_UNIT: 'MasterUnit',
+  SHEET_DOC_BIDANG: 'DocBidang',
   SESSION_SECONDS: 21600
 };
