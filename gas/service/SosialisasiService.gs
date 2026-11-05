@@ -21,7 +21,7 @@ function markDocumentRead_(token, docRowIndex, judulDokumen) {
       return { success: false, message: 'Dokumen tidak ditemukan.' };
     }
     var docRow = docs[docIndex - 1];
-    while (docRow.length < 19) docRow.push('');
+    while (docRow.length < 22) docRow.push('');
     if (!canReadDocument_(docRow, actor, getMasterBidangValues_())) {
       return { success: false, message: 'Akses ditolak.' };
     }
@@ -59,7 +59,7 @@ function getMyReadDocs_(token) {
       var docIndex = Number(rows[i][3]);
       if (!Number.isInteger(docIndex) || docIndex < 2 || docIndex - 1 >= docs.length) continue;
       var docRow = docs[docIndex - 1];
-      while (docRow.length < 19) docRow.push('');
+      while (docRow.length < 22) docRow.push('');
       if (canReadDocument_(docRow, actor, master)) readDocs.push(docIndex);
     }
     return { success: true, data: readDocs };

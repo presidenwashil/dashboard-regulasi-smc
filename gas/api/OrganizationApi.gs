@@ -7,4 +7,5 @@ function createMasterUnit() { return createMasterUnit_.apply(this, arguments); }
 function renameMasterUnit() { return renameMasterUnit_.apply(this, arguments); }
 function reparentMasterUnit() { return reparentMasterUnit_.apply(this, arguments); }
 function deleteMasterUnit() { return deleteMasterUnit_.apply(this, arguments); }
+function migrateUploaderUnitIds() { return migrateUploaderUnitIds_.apply(this, arguments); }
 

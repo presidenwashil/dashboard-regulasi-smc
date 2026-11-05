@@ -79,7 +79,7 @@ export function defaultMockSeed(): MockSeed {
     [T_DOC_PEDOMAN, "Pedoman Penanganan Risiko Rumah Zakat", "PM/2024/004", "Pedoman", "Direksi", "Direktur",
       "Umum, Komite Mutu", "Revisi", 2, T_DOC_PEDOMAN,
       "https://docs.google.com/document/d/mock-pedoman-pdf", "https://docs.google.com/document/d/mock-pedoman-word",
-      "TKRS, PMKP", "", "", "", "", "1,9", ""],
+      "TKRS, PMKP", "", "Aktif", "0042", "Yanmed", "1,9", 7],
     // sheet row 4 — Baru, Non-Aktif, no word file
     [T_DOC_PANDUAN, "Panduan Terkait PPI", "PD/PPI/001", "Panduan", "Komite PPI", "PPI",
       "Komite PPI", "Baru", "", T_DOC_PANDUAN, "", "", "PPI", "", "Non-Aktif", "", "", "12", ""],

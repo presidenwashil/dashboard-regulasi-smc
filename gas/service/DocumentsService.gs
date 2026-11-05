@@ -6,12 +6,12 @@ function getDocsSheet_() {
   return sheet;
 }
 
-function buildDocRow_(timestamp, data, pdfUrl, wordUrl, statusBerlaku, uploaderNrp, uploaderBidang, targetBidangIds, uploaderBidangId) {
+function buildDocRow_(timestamp, data, pdfUrl, wordUrl, statusBerlaku, uploaderNrp, uploaderBidang, targetBidangIds, uploaderBidangId, uploaderUnitId) {
   return [
     timestamp, data.judul, data.nomor, data.jenis, data.pemilik,
     data.unit, data.bidang, data.status, data.revisi, data.tanggal,
     pdfUrl, wordUrl, data.akreditasi, data.keterangan, statusBerlaku,
-    uploaderNrp || '', uploaderBidang || '', targetBidangIds || '', uploaderBidangId || ''
+    uploaderNrp || '', uploaderBidang || '', targetBidangIds || '', uploaderBidangId || '', uploaderUnitId || ''
   ];
 }
 
@@ -33,14 +33,15 @@ function uploadDocFiles_(data, fallbackPdf, fallbackWord) {
 
 
 function ensureDocMetadataHeaders_(sheet) {
-  var header = sheet.getRange(1, 16, 1, 4).getValues()[0];
-  if (header.length < 4) {
-    Logger.log('Warning: Database_Regulasi metadata columns (16-19) appear shifted or removed; BidangTargetIDs at column 18 must remain in place.');
+  var header = sheet.getRange(1, 16, 1, 5).getValues()[0];
+  if (header.length < 5) {
+    Logger.log('Warning: Database_Regulasi metadata columns (16-20) appear shifted or removed; BidangTargetIDs at column 18 must remain in place.');
   }
   if (!header[0]) sheet.getRange(1, 16).setValue('UploaderNRP');
   if (!header[1]) sheet.getRange(1, 17).setValue('UploaderBidang');
   if (!header[2]) sheet.getRange(1, 18).setValue('BidangTargetIDs');
   if (!header[3]) sheet.getRange(1, 19).setValue('UploaderBidangID');
+  if (!header[4]) sheet.getRange(1, 20).setValue('UploaderUnitID');
 }
 
 function saveDataWithFiles_(token, data) {
@@ -51,6 +52,7 @@ function saveDataWithFiles_(token, data) {
     var actor = currentDocumentActor_(auth.session);
     if (!actor) return { success: false, message: 'Akses ditolak.' };
     var master = getMasterBidangValues_();
+    var masterUnit = getMasterUnitValues_(master);
     var uploaderBidang = masterBidangById_(actor.bidangId, master);
     if (!uploaderBidang) {
       return { success: false, message: 'Unit akun belum terpetakan ke Bidang. Hubungi Admin sebelum mengunggah dokumen.' };
@@ -59,8 +61,13 @@ function saveDataWithFiles_(token, data) {
     if (targets === null) {
       return { success: false, message: 'Tujuan Bidang/Komite harus dipilih dari ID MasterBidang yang valid.' };
     }
+    var unitTargets = normalizeUnitTargets_(data.unitIds, masterUnit);
+    if (unitTargets === null) {
+      return { success: false, message: 'Tujuan Unit Organisasi harus dipilih dari ID MasterUnit yang valid.' };
+    }
     data.bidang = targets.length ? targets.map(function (target) { return target.name; }).join(', ') : '-';
     var targetIds = targets.map(function (target) { return target.id; });
+    var unitTargetIds = unitTargets.map(function (target) { return target.id; });
     var files;
     try {
       files = uploadDocFiles_(data, '', '');
@@ -77,10 +84,11 @@ function saveDataWithFiles_(token, data) {
       ensureDocMetadataHeaders_(sheet);
       sheet.appendRow(buildDocRow_(
         new Date(), data, files.pdfUrl, files.wordUrl, data.statusBerlaku || 'Aktif',
-        actor.nrp, uploaderBidang.name, '', uploaderBidang.id
+        actor.nrp, uploaderBidang.name, '', uploaderBidang.id, actor.unitId || ''
       ));
       var newRowNumber = sheet.getLastRow();
       replaceTargetsForDoc_(newRowNumber, targetIds);
+      replaceTargetsForDocUnit_(newRowNumber, unitTargetIds);
       return { success: true, message: 'Data dan File berhasil disimpan!' };
     } finally {
       lock.releaseLock();
@@ -106,18 +114,25 @@ function updateDataWithFiles_(token, data, rowIndex) {
     var existing = allRows[rowNumber - 1];
     while (existing.length < 19) existing.push('');
     var master = getMasterBidangValues_();
-    if (!canEditDocument_(existing, actor, master)) {
+    var masterUnit = getMasterUnitValues_(master);
+    if (!canEditDocument_(existing, actor, master, masterUnit)) {
       return { success: false, message: 'Akses ditolak.' };
     }
     var isAdmin = actor.role === 'Admin';
     var adminTargetIds = null;
+    var adminUnitTargetIds = null;
     if (isAdmin) {
       var targets = normalizeDocumentTargets_(data.bidangIds, master);
       if (targets === null) {
         return { success: false, message: 'Tujuan Bidang/Komite harus dipilih dari ID MasterBidang yang valid.' };
       }
+      var unitTargets = normalizeUnitTargets_(data.unitIds, masterUnit);
+      if (unitTargets === null) {
+        return { success: false, message: 'Tujuan Unit Organisasi harus dipilih dari ID MasterUnit yang valid.' };
+      }
       data.bidang = targets.length ? targets.map(function (target) { return target.name; }).join(', ') : '-';
       adminTargetIds = targets.map(function (target) { return target.id; });
+      adminUnitTargetIds = unitTargets.map(function (target) { return target.id; });
     } else {
       data.bidang = existing[6] || '-';
     }
@@ -135,14 +150,18 @@ function updateDataWithFiles_(token, data, rowIndex) {
     }
     try {
       ensureDocMetadataHeaders_(sheet);
-      sheet.getRange(rowNumber, 1, 1, 19).setValues([
+      while (existing.length < 20) existing.push('');
+      sheet.getRange(rowNumber, 1, 1, 20).setValues([
         buildDocRow_(
           new Date(), data, files.pdfUrl, files.wordUrl, data.statusBerlaku || existing[14] || 'Aktif',
-          existing[15], existing[16], '', existing[18]
+          existing[15], existing[16], '', existing[18], existing[19]
         )
       ]);
       if (isAdmin && adminTargetIds !== null) {
         replaceTargetsForDoc_(rowNumber, adminTargetIds);
+      }
+      if (isAdmin && adminUnitTargetIds !== null) {
+        replaceTargetsForDocUnit_(rowNumber, adminUnitTargetIds);
       }
       return { success: true, message: 'Data berhasil diperbarui!' };
     } finally {
@@ -165,28 +184,46 @@ function getAllData_(token) {
  
   var junctionRows = getAllDocBidangRows_();
   var junctionMap = groupDocBidangByDoc_(junctionRows);
- 
+  var unitJunctionRows = getAllDocUnitRows_();
+  var unitJunctionMap = groupDocUnitByDoc_(unitJunctionRows);
+
+  var masterUnit = getMasterUnitValues_(master);
+  var unitNameById = {};
+  for (var u = 0; u < masterUnit.length; u++) {
+    unitNameById[masterUnit[u].id] = masterUnit[u].name;
+  }
+
   var rows = data.slice(1);
   var visibleRows = [];
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i];
-    while (row.length < 19) row.push('');
+    while (row.length < 20) row.push('');
     var docRowIndex = i + 2;
-    // Hydrate column R from the junction when available; fall back to the
-    // legacy comma-joined value for not-yet-migrated sheets.
+    // Hydrate column R (bidang) from the junction when available.
     var junctionIds = junctionMap[docRowIndex];
     if (junctionIds && junctionIds.length > 0) {
       row[17] = junctionIds.join(',');
     }
+    // Hydrate unit targets from DocUnit junction.
+    var unitJunctionIds = unitJunctionMap[docRowIndex];
+    var unitIds = [];
+    if (unitJunctionIds && unitJunctionIds.length > 0) {
+      unitIds = unitJunctionIds.slice();
+    }
+    var unitNames = unitIds.map(function (id) { return unitNameById[id] || ''; }).filter(Boolean);
     // row[17] keeps its legacy value otherwise
-    if (!canReadDocument_(row, actor, master)) continue;
+    if (!canReadDocument_(row, actor, master, masterUnit)) continue;
     var visible = row.slice(0, 15);
     if (visible[0] instanceof Date) visible[0] = visible[0].getTime();
     if (visible[9] instanceof Date) visible[9] = visible[9].getTime();
     if (!visible[14] && visible[1]) visible[14] = 'Aktif';
     visible[15] = docRowIndex;
-    visible[16] = canEditDocument_(row, actor, master);
+    visible[16] = canEditDocument_(row, actor, master, masterUnit);
     visible[17] = row[17];
+    visible[18] = unitIds.join(',');
+    visible[19] = unitNames.join(', ');
+    visible[20] = row[19] || '';
+    visible[21] = row[20] || '';
     visibleRows.push(visible);
   }
   visibleRows.reverse();

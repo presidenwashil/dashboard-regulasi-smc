@@ -3,5 +3,7 @@ var SCHEMA = {
   MasterBidang: ['Bidang', 'BidangID'],
   MasterUnit: ['UnitID', 'Unit', 'BidangID'],
   Sosialisasi: ['Timestamp', 'NRP', 'Nama', 'DocRowIndex', 'JudulDokumen'],
-  Database_Regulasi: ['Timestamp', 'Judul', 'Nomor', 'Jenis', 'Pemilik', 'Unit', 'Bidang', 'Status', 'Revisi', 'Tanggal', 'PDF', 'Word', 'Akreditasi', 'Keterangan', 'StatusBerlaku', 'UploaderNRP', 'UploaderBidang', 'BidangTargetIDs', 'UploaderBidangID']
+  Database_Regulasi: ['Timestamp', 'Judul', 'Nomor', 'Jenis', 'Pemilik', 'Unit', 'Bidang', 'Status', 'Revisi', 'Tanggal', 'PDF', 'Word', 'Akreditasi', 'Keterangan', 'StatusBerlaku', 'UploaderNRP', 'UploaderBidang', 'BidangTargetIDs', 'UploaderBidangID', 'UploaderUnitID'],
+  DocBidang: ['Timestamp', 'DocRowIndex', 'BidangID'],
+  DocUnit: ['Timestamp', 'DocRowIndex', 'UnitID']
 };

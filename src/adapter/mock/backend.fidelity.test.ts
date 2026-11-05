@@ -240,7 +240,7 @@ describe("mock fidelity: documents", () => {
     const sesi = await admin();
     await api.saveDataWithFiles(sesi, {
       judul: "SPO Compliance Baru", nomor: "SPO/IT/010", jenis: "SPO", pemilik: "IT", unit: "Data Center",
-      bidangIds: [4], statusDokumen: "Baru", revisi: null, tanggal: "2026-10-01",
+      bidangIds: [4], unitIds: [], statusDokumen: "Baru", revisi: null, tanggal: "2026-10-01",
       akreditasi: [], keterangan: "", statusBerlaku: "Aktif",
       pdfFile: { name: "spo.pdf", mimeType: "application/pdf", data: "Zm9v" },
       wordFile: null,
@@ -538,6 +538,7 @@ describe("mock fidelity: master organisasi writes (gas/Master.gs)", () => {
       pemilik: "IT",
       unit: "IT",
       bidangIds: [],
+      unitIds: [],
       statusDokumen: "Baru",
       revisi: null,
       tanggal: null,
@@ -588,6 +589,7 @@ describe("mock fidelity: master organisasi writes (gas/Master.gs)", () => {
       pemilik: "Yanmed",
       unit: "IGD",
       bidangIds: [1],
+      unitIds: [],
       statusDokumen: "Baru",
       revisi: null,
       tanggal: null,
