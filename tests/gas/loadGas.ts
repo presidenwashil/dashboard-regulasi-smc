@@ -34,7 +34,7 @@ export function loadGas(files: string[], overrides: Record<string, unknown> = {}
       }),
     },
     LockService: {
-      getScriptLock: () => ({ waitLock: () => undefined, releaseLock: () => undefined }),
+      getScriptLock: () => ({ waitLock: () => undefined, tryLock: () => true, releaseLock: () => undefined }),
     },
     Logger: { log: () => undefined },
     Session: { getScriptTimeZone: () => 'Asia/Makassar' },

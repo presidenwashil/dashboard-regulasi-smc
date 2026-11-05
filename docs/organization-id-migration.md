@@ -57,3 +57,33 @@ columns are A–J, `UnitID` is appended in column K.
 
 The application does not change Google Drive sharing in this rollout. Existing
 Drive file URLs remain available to anyone who already has the link.
+
+## Known limitations (DocBidang junction)
+
+Document targets are now stored in the `DocBidang` junction sheet (`Timestamp`,
+`DocRowIndex`, `BidangID`) instead of the comma-joined `BidangTargetIDs` cell
+(column R), which Google Sheets could mis-parse as a date. Column R is retained
+in place but is deprecated: it is no longer read or written, and
+`ensureDocMetadataHeaders_` keeps its header so column indices (including
+`UploaderBidangID` at column S) do not shift.
+
+### Foreign-key stability
+
+`DocRowIndex` is the 1-based spreadsheet row number in `Database_Regulasi` and
+is also used by `Sosialisasi` read receipts. It is stable only as long as rows
+are not deleted, reordered, or inserted above existing data. If any of those
+happens, junction and read-receipt rows silently point at the wrong documents.
+
+Trigger conditions that require migrating to a stable `DocID` (deferred):
+
+- Any document delete feature is added.
+- Manual row sorting or moving in the production sheet.
+- Row insertion above existing data.
+
+### Migration of legacy targets
+
+Run the admin migration helper (`migrateDocTargetsToJunction`) once after
+deploying. It migrates only cells that are still text matching
+`/^\\d+(,\\s*\\d+)*$/`; cells already parsed as dates are skipped and logged,
+and those documents need manual re-entry of their targets. The helper is
+idempotent and returns `{ migrated, skippedAsDate, alreadyMigrated }`.

@@ -598,7 +598,7 @@ describe("mock fidelity: master organisasi writes (gas/Master.gs)", () => {
       wordFile: null,
     });
     const savedRow = seed.documents.at(-1)!;
-    expect(savedRow[17]).toBe("1");
+    expect(savedRow[17]).toBe("");
     expect(savedRow[18]).toBe(7);
 
     await expect(localApi.reparentMasterUnit(adminSesi, 102, 3)).resolves.toMatchObject({
@@ -617,8 +617,11 @@ describe("mock fidelity: master organisasi writes (gas/Master.gs)", () => {
       expect.objectContaining({ nrp: "0042", bidangId: 3, bidang: "Casemix", unitId: 102 }),
     );
     // ...while the document keeps its target IDs and uploader snapshot.
-    expect(seed.documents.at(-1)![17]).toBe("1");
+    expect(seed.documents.at(-1)![17]).toBe("");
     expect(seed.documents.at(-1)![18]).toBe(7);
+    const reparentedDocs = await localApi.getAllData(adminSesi);
+    const reparentedSaved = reparentedDocs.find((doc: { judul?: string }) => doc.judul === "Dokumen Farah");
+    expect(reparentedSaved?.bidangIds).toEqual([1]);
     await expect(localApi.deleteMasterBidang(adminSesi, 7)).rejects.toThrow(
       "Bidang tidak dapat dihapus karena masih menjadi snapshot Bidang pengunggah Dokumen.",
     );

@@ -81,18 +81,51 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
       : null;
   }
 
+  // Junction store mirroring the DocBidang sheet.
+  const docBidangRows: Array<[number, number, number]> = [];
+  seed.documents.forEach((row, index) => {
+    const docRowIndex = index + 2;
+    const ids = String((row as Array<unknown>)[17] ?? "").trim();
+    if (ids && ids !== "-") {
+      for (const part of ids.split(",")) {
+        const id = Number(part.trim());
+        if (Number.isInteger(id) && id > 0) docBidangRows.push([Date.now(), docRowIndex, id]);
+      }
+    }
+  });
+
   function documentBidangReferences(bidangId: number) {
-    let target = false;
+    let target = docBidangRows.some((entry) => entry[2] === bidangId);
     let uploader = false;
     for (const row of seed.documents) {
-      const ids = String(row[17] ?? "").trim();
-      if (ids && ids !== "-" && ids.split(",").some((value) => Number(value.trim()) === bidangId)) {
-        target = true;
-      }
-      if (Number(row[18]) === bidangId) uploader = true;
-      if (target && uploader) break;
+      if (Number(row[18]) === bidangId) { uploader = true; break; }
     }
     return { target, uploader };
+  }
+
+  function groupDocBidangByDoc(): Record<number, number[]> {
+    const map: Record<number, number[]> = {};
+    for (const entry of docBidangRows) {
+      const docIndex = entry[1];
+      const id = entry[2];
+      if (!map[docIndex]) map[docIndex] = [];
+      if (!map[docIndex].includes(id)) map[docIndex].push(id);
+    }
+    return map;
+  }
+
+  function replaceDocBidangTargets(docRowIndex: number, bidangIds: number[]) {
+    // capture old row count? Just rebuild: remove existing for doc, then add new.
+    for (let i = docBidangRows.length - 1; i >= 0; i--) {
+      if (docBidangRows[i][1] === docRowIndex) docBidangRows.splice(i, 1);
+    }
+    const ids: number[] = [];
+    for (const raw of bidangIds) {
+      const id = Number(raw);
+      if (Number.isInteger(id) && id > 0 && !ids.includes(id)) ids.push(id);
+    }
+    for (const id of ids) docBidangRows.push([Date.now(), docRowIndex, id]);
+    return ids;
   }
 
   function publicMasterUnit(unit: MockSeed["masterUnit"][number]) {
@@ -168,12 +201,16 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
   function docRawRows(actor?: User): Array<Array<unknown>> {
     // Mirror Code.js getAllData: pad, default Aktif, append the sheet row
     // index and edit permission, reverse (newest first). Seed timestamps are already ms numbers.
+    const junctionMap = groupDocBidangByDoc();
     const rows = seed.documents.map((row, index) => {
       const padded = [...row];
       while (padded.length < 15) padded.push("");
       if (!padded[14] && padded[1]) padded[14] = "Aktif";
       while (padded.length < 19) padded.push("");
-      return { row: padded as Array<unknown>, rowIndex: index + 2 };
+      const rowIndex = index + 2;
+      // Hydrate deprecated column 17 from the junction store.
+      padded[17] = (junctionMap[rowIndex] ?? []).join(",");
+      return { row: padded as Array<unknown>, rowIndex };
     }).filter(({ row }) => !actor || canReadDocument(row, actor))
       .map(({ row, rowIndex }) => [...row.slice(0, 15), rowIndex, actor ? canEditDocument(row, actor) : false, row[17]]);
     return rows.reverse();
@@ -677,6 +714,7 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
       }
       const targetBidangs = targets.filter((target) => target !== null);
       const uniqueTargetBidangs = [...new Map(targetBidangs.map((target) => [target.id, target])).values()];
+      const docRowIndex = seed.documents.length + 2;
       seed.documents.push([
         Date.now(),
         String(data.judul ?? ""), String(data.nomor ?? ""), String(data.jenis ?? ""),
@@ -685,8 +723,9 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
         String(data.status ?? "Baru"), data.revisi ?? "", data.tanggal ?? "",
         "", "", String(data.akreditasi ?? "-"), String(data.keterangan ?? ""),
         String(data.statusBerlaku ?? "Aktif"), nrpDisplay(user.nrp), user.bidang,
-        uniqueTargetBidangs.map((target) => target.id).join(","), user.bidangId,
+        "", user.bidangId,
       ]);
+      replaceDocBidangTargets(docRowIndex, uniqueTargetBidangs.map((target) => target.id));
       return { success: true, message: "Data dan File berhasil disimpan!" };
     },
 
@@ -702,7 +741,6 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
       while (existing.length < 19) existing.push("");
       if (!canEditDocument(existing, user)) return ACCESS_DENIED;
       let targetValue = String(existing[6] ?? "-");
-      let targetIdsValue = String(existing[17] ?? "");
       if (user.role === "Admin") {
         const requestedTargets = documentTargets(data.bidangIds);
         const targets = requestedTargets.map(masterBidangById);
@@ -711,7 +749,7 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
         }
         const uniqueTargets = [...new Map(targets.filter((target) => target !== null).map((target) => [target.id, target])).values()];
         targetValue = uniqueTargets.length ? uniqueTargets.map((target) => target.name).join(", ") : "-";
-        targetIdsValue = uniqueTargets.map((target) => target.id).join(",");
+        replaceDocBidangTargets(Number(rowIndex), uniqueTargets.map((target) => target.id));
       }
       seed.documents[position] = [
         Date.now(),
@@ -722,7 +760,7 @@ export function createMockBackend(seedInput: MockSeed = defaultMockSeed()): Mock
         data.wordFile ? "https://docs.google.com/document/d/mock-new-word" : existing[11] ?? "",
         String(data.akreditasi ?? existing[12]), String(data.keterangan ?? existing[13]),
         String(data.statusBerlaku ?? existing[14] ?? "Aktif"), existing[15], existing[16],
-        targetIdsValue, existing[18],
+        "", existing[18],
       ];
       return { success: true, message: "Data berhasil diperbarui!" };
     },

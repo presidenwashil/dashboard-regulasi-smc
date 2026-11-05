@@ -59,29 +59,54 @@ function getMasterBidangValues_() {
 }
 
 function documentBidangReferences_(bidangId) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_DOCS);
-  if (!sheet) return { target: false, uploader: false };
-  var rows = sheet.getDataRange().getValues();
-  if (rows.length < 2) return { target: false, uploader: false };
-
-  var header = rows[0] || [];
-  var targetColumn = masterColumn_(header, 'BidangTargetIDs');
-  var uploaderColumn = masterColumn_(header, 'UploaderBidangID');
-  if (targetColumn < 0) targetColumn = 17;
-  if (uploaderColumn < 0) uploaderColumn = 18;
-
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var docsSheet = ss.getSheetByName(CONFIG.SHEET_DOCS);
   var target = false;
   var uploader = false;
-  for (var i = 1; i < rows.length; i++) {
-    var ids = masterIdList_(rows[i][targetColumn]);
-    for (var j = 0; j < ids.length; j++) {
-      if (Number(ids[j]) === bidangId) {
+
+  // Target references live in the DocBidang junction sheet when populated;
+  // fall back to the legacy column R for not-yet-migrated sheets.
+  var junctionSheet = ss.getSheetByName(CONFIG.SHEET_DOC_BIDANG);
+  var junctionRows = junctionSheet ? junctionSheet.getDataRange().getValues() : [];
+  var junctionHasRows = junctionRows.length > 1;
+  if (junctionHasRows) {
+    for (var j = 1; j < junctionRows.length; j++) {
+      if (Number(junctionRows[j][2]) === bidangId) {
         target = true;
         break;
       }
     }
-    if (Number(rows[i][uploaderColumn]) === bidangId) uploader = true;
-    if (target && uploader) break;
+  } else if (docsSheet) {
+    var dRows = docsSheet.getDataRange().getValues();
+    if (dRows.length >= 2) {
+      var header = dRows[0] || [];
+      var targetColumn = masterColumn_(header, 'BidangTargetIDs');
+      if (targetColumn < 0) targetColumn = 17;
+      for (var i = 1; i < dRows.length; i++) {
+        var ids = masterIdList_(dRows[i][targetColumn]);
+        for (var k = 0; k < ids.length; k++) {
+          if (Number(ids[k]) === bidangId) { target = true; break; }
+        }
+        if (target) break;
+      }
+    }
   }
+
+  // Uploader snapshot still lives in Database_Regulasi column S (UploaderBidangID).
+  if (docsSheet) {
+    var rows = docsSheet.getDataRange().getValues();
+    if (rows.length >= 2) {
+      var header = rows[0] || [];
+      var uploaderColumn = masterColumn_(header, 'UploaderBidangID');
+      if (uploaderColumn < 0) uploaderColumn = 18;
+      for (var i = 1; i < rows.length; i++) {
+        if (Number(rows[i][uploaderColumn]) === bidangId) {
+          uploader = true;
+          break;
+        }
+      }
+    }
+  }
+
   return { target: target, uploader: uploader };
 }
